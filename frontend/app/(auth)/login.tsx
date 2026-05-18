@@ -4,15 +4,40 @@ import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Keyb
 import { router } from 'expo-router';
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    // 這裡未來可以放後端驗證 API 的邏輯
-    console.log('進行登入...', email);
+  const handleLogin = async () => {
+    if (!account || !password) {
+      alert("請輸入帳號與密碼！");
+      return;
+    }
 
-    // 驗證成功後，直接跳轉到環境總覽頁面
-    router.replace('/environment');
+    try {
+      // 這裡直接使用 localhost
+      const response = await fetch('http://localhost:3000/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: account, // 將前端的 account 轉成後端要的 username
+          password: password
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("✅ 登入成功！");
+        router.replace('/environment');
+      } else {
+        alert("❌ 登入失敗：" + data.message);
+      }
+    } catch (error) {
+      console.error("連線錯誤:", error);
+      alert("無法連線到伺服器，請確認後端已啟動！");
+    }
   };
 
   return (
@@ -38,8 +63,8 @@ export default function LoginScreen() {
                 style={styles.input}
                 placeholder="請輸入您的帳號"
                 placeholderTextColor="#666"
-                value={email}
-                onChangeText={setEmail}
+                value={account}
+                onChangeText={setAccount}
                 keyboardType="default"
                 autoCapitalize="none"
               />

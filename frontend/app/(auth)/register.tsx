@@ -12,10 +12,42 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleRegister = () => {
-    console.log('註冊', { nickname, account, password, confirmPassword });
-    // 註冊成功後通常跳轉到登入
-    router.replace('/(auth)/login'); 
+  const handleRegister = async () => {
+    if (!nickname || !account || !password) {
+      alert("請填寫所有欄位！");
+      return;
+    }
+    if (password !== confirmPassword) {
+      alert("兩次輸入的密碼不一致！");
+      return;
+    }
+
+    try {
+      // 這裡直接使用 localhost
+      const response = await fetch('http://localhost:3000/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nickname: nickname,
+          username: account, // 將前端的 account 轉成後端要的 username
+          password: password
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("🎉 註冊成功！請登入");
+        router.replace('/(auth)/login'); 
+      } else {
+        alert("❌ 註冊失敗：" + data.message);
+      }
+    } catch (error) {
+      console.error("連線錯誤:", error);
+      alert("無法連線到伺服器，請確認後端已啟動！");
+    }
   };
 
   return (
