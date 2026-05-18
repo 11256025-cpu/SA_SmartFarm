@@ -31,16 +31,16 @@ export default function LoginScreen() {
 
           {/* 表單區塊 */}
           <View style={styles.form}>
-            {/* 電子郵件輸入框 */}
+            {/* 帳號輸入框 */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>電子郵件</Text>
+              <Text style={styles.label}>帳號</Text>
               <TextInput
                 style={styles.input}
-                placeholder="請輸入您的 Email"
+                placeholder="請輸入您的帳號"
                 placeholderTextColor="#666"
                 value={email}
                 onChangeText={setEmail}
-                keyboardType="email-address"
+                keyboardType="default"
                 autoCapitalize="none"
               />
             </View>
