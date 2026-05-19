@@ -1,11 +1,14 @@
 // app/(auth)/login.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react'; // 💡 這裡幫你引入了 useRef
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+
+  // 💡 建立一個密碼輸入框的錨點 (Ref)
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (!account || !password) {
@@ -67,6 +70,10 @@ export default function LoginScreen() {
                 onChangeText={setAccount}
                 keyboardType="default"
                 autoCapitalize="none"
+                
+                // 💡 加上這兩行：按 Enter 自動跳到密碼欄位
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
               />
             </View>
 
@@ -74,6 +81,7 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>密碼</Text>
               <TextInput
+                ref={passwordInputRef} // 💡 綁定錨點
                 style={styles.input}
                 placeholder="請輸入您的密碼"
                 placeholderTextColor="#666"
@@ -81,6 +89,10 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
                 autoCapitalize="none"
+                
+                // 💡 加上這兩行：按 Enter 直接觸發登入
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
               />
             </View>
 
@@ -130,6 +142,8 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
+    maxWidth: 420,        // 💡 限制表單最大寬度，網頁版就不會肥肥的
+    alignSelf: 'center',   // 💡 讓表單在畫面上靠中對齊
   },
   inputContainer: {
     marginBottom: 20,
@@ -149,6 +163,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#33373E',
+    ...Platform.select({ web: { cursor: 'text' } as any }), // 💡 讓網頁游標變輸入型
   },
   button: {
     backgroundColor: '#5A8B73', // 搭配智慧農場的綠色系
@@ -160,6 +175,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
+    ...Platform.select({ web: { cursor: 'pointer' } as any }), // 💡 讓網頁按鈕有滑鼠小手
   },
   buttonText: {
     color: '#FFFFFF',
@@ -169,6 +185,7 @@ const styles = StyleSheet.create({
   switchButton: {
     marginTop: 20,
     alignItems: 'center',
+    ...Platform.select({ web: { cursor: 'pointer' } as any }), // 💡 讓超連結也有滑鼠小手
   },
   switchText: {
     color: '#5A8B73',
