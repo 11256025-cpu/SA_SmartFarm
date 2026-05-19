@@ -5,12 +5,11 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { useColorScheme, Pressable } from 'react-native';
-import Colors from '@/constants/Colors';
+import { useColorScheme } from 'react-native';
 
 export {
   // Catch any errors thrown by the Layout component.
-  ErrorBoundary,
+  ErrorBoundary
 } from 'expo-router';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
@@ -45,27 +44,21 @@ function RootLayoutNav() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         {/* 首頁 */}
-        <Stack.Screen 
-          name="index" 
-          options={{ 
-            title: '首頁',
-            headerTintColor:'#ffffff',
-            headerRight: () => (
-              <Pressable>
-                {({ pressed }) => (
-                  <FontAwesome
-                    name="code"
-                    size={25}
-                    color={'#ffffff'}
-                    style={{ marginRight: 15, opacity: pressed ? 0.5 : 1 }}
-                  />
-                )}
-              </Pressable>
-            ),
-          }} 
-        />
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         {/* 驗證分組 */}
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        {/* 頁籤分組 */}
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        {/* 環境頁面 */}
+        <Stack.Screen name="environment" options={{ headerShown: false }} />
+        {/* 警示頁面 */}
+        <Stack.Screen name="alerts" options={{ headerShown: false }} />
+        {/* 作物頁面 */}
+        <Stack.Screen name="crops" options={{ headerShown: false }} />
+        {/* 報表頁面 */}
+        <Stack.Screen name="reports" options={{ headerShown: false }} />
+        {/* 個人資料頁面 */}
+        <Stack.Screen name="profile" options={{ headerShown: false }} />
       </Stack>
     </ThemeProvider>
   );
