@@ -214,12 +214,14 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   navLeftGroup: {
-    flex: 1, // <--- 關鍵：讓它強制擴展，推開右邊
+    flex: 1, // 讓左邊群組強制佔用所有剩餘空間，把右邊擠開
     flexDirection: 'row',
     gap: 25,
+    alignItems: 'center', // 垂直置中
   },
   navRightGroup: {
-    paddingLeft: 20, // 給圖示一點呼吸空間
+    marginLeft: 20, // 確保右側與左側選單有足夠間距
+    alignItems: 'flex-end',
   },
 
   navItemActive: {
