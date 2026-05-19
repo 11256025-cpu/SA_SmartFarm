@@ -1,11 +1,14 @@
 // app/(auth)/login.tsx
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react'; // 💡 這裡幫你引入了 useRef
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+
+  // 💡 建立一個密碼輸入框的錨點 (Ref)
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
     if (!account || !password) {
@@ -67,6 +70,10 @@ export default function LoginScreen() {
                 onChangeText={setAccount}
                 keyboardType="default"
                 autoCapitalize="none"
+                
+                // 💡 加上這兩行：按 Enter 自動跳到密碼欄位
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
               />
             </View>
 
@@ -74,6 +81,7 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>密碼</Text>
               <TextInput
+                ref={passwordInputRef} // 💡 綁定錨點
                 style={styles.input}
                 placeholder="請輸入您的密碼"
                 placeholderTextColor="#666"
@@ -81,6 +89,10 @@ export default function LoginScreen() {
                 onChangeText={setPassword}
                 secureTextEntry
                 autoCapitalize="none"
+                
+                // 💡 加上這兩行：按 Enter 直接觸發登入
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
               />
             </View>
 
