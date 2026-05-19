@@ -209,21 +209,25 @@ const styles = StyleSheet.create({
   topNav: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 25,
     paddingHorizontal: 10,
     width: '100%',
   },
   navLeftGroup: {
-    flex: 1, // 讓左邊群組強制佔用所有剩餘空間，把右邊擠開
     flexDirection: 'row',
     gap: 25,
-    alignItems: 'center', // 垂直置中
+    alignItems: 'center',
   },
   navRightGroup: {
-    marginLeft: 20, // 確保右側與左側選單有足夠間距
-    alignItems: 'flex-end',
+    // 這裡我們把圖示的 TouchableOpacity 包起來的容器樣式定義好
+    marginLeft: 'auto', // 這是最暴力也最有效的靠右法：自動推到最右邊
   },
-
+  navItem: {
+    paddingBottom: 8,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
   navItemActive: {
     borderBottomColor: '#5A8B73',
   },
@@ -236,6 +240,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
+
   // --- 警示框樣式 ---
   warningWrapper: {
     alignItems: 'flex-end',
