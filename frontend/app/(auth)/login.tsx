@@ -13,31 +13,9 @@ export default function LoginScreen() {
       return;
     }
 
-    try {
-      // 這裡直接使用 localhost
-      const response = await fetch('http://localhost:3000/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          username: account, // 將前端的 account 轉成後端要的 username
-          password: password
-        })
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert("✅ 登入成功！");
-        router.replace('/environment');
-      } else {
-        alert("❌ 登入失敗：" + data.message);
-      }
-    } catch (error) {
-      console.error("連線錯誤:", error);
-      alert("無法連線到伺服器，請確認後端已啟動！");
-    }
+    // 測試模式：直接登入，不連後端資料庫
+    alert("✅ 測試模式登入成功！");
+    router.replace('/environment');
   };
 
   return (
@@ -67,10 +45,8 @@ export default function LoginScreen() {
                 onChangeText={setAccount}
                 keyboardType="default"
                 autoCapitalize="none"
-                
-                // 💡 加上這兩行：按 Enter 自動跳到密碼欄位
-                returnKeyType="next"
-                onSubmitEditing={() => passwordInputRef.current?.focus()}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
               />
             </View>
 
