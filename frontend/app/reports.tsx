@@ -119,9 +119,9 @@ export default function ReportsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#1E222B' },
-  topNav: { height: 60, backgroundColor: '#161920', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24 },
-  navLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 24 },
-  navRightGroup: { flexDirection: 'row', alignItems: 'center' },
+  topNav: { height: 60, backgroundColor: '#161920', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', position: 'relative', paddingHorizontal: 24 },
+  navLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 24, justifyContent: 'center' },
+  navRightGroup: { position: 'absolute', right: 24, flexDirection: 'row', alignItems: 'center' },
   header: { height: 60, backgroundColor: '#161920', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 24 },
   brandText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
   headerRight: { flexDirection: 'row', gap: 24 },

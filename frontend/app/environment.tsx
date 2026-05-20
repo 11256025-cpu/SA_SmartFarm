@@ -261,7 +261,8 @@ const styles = StyleSheet.create({
   topNav: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    position: 'relative',
     marginBottom: 25,
     paddingHorizontal: 10,
     width: '100%',
@@ -270,9 +271,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 25,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   navRightGroup: {
-    marginLeft: 'auto',
+    position: 'absolute',
+    right: 10,
   },
   navItem: {
     paddingBottom: 8,

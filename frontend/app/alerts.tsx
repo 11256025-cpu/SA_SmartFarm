@@ -139,9 +139,9 @@ const styles = StyleSheet.create({
   mainLayout: { width: '100%', maxWidth: 1000, padding: 30 },
   
   // 導覽列
-  topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 30, width: '100%' },
-  navLeftGroup: { flex: 1, flexDirection: 'row', gap: 25, alignItems: 'center' },
-  navRightGroup: { marginLeft: 'auto' },
+  topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 30, width: '100%' },
+  navLeftGroup: { flexDirection: 'row', gap: 25, alignItems: 'center', justifyContent: 'center' },
+  navRightGroup: { position: 'absolute', right: 10 },
   navItem: { paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
   navItemActive: { borderBottomColor: '#5A8B73' },
   navText: { color: '#999', fontSize: 16 },

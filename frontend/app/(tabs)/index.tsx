@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, SafeAreaView, TouchableOpacity, Switch, TextInput } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { SafeAreaView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function EnvironmentScreen() {
   // 模擬從後端取得的數據狀態
@@ -104,9 +104,11 @@ const styles = StyleSheet.create({
   },
   topNav: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginBottom: 30,
     paddingTop: 10,
+    width: '100%',
   },
   navItem: {
     color: '#888',
