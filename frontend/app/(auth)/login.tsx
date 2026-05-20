@@ -1,18 +1,15 @@
 // app/(auth)/login.tsx
-import React, { useState, useRef } from 'react'; // 💡 這裡幫你引入了 useRef
-import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
 import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
-  const [password, setPassword] = useState('');
-
-  // 💡 建立一個密碼輸入框的錨點 (Ref)
-  const passwordInputRef = useRef<TextInput>(null);
+  const [password, setPassword] = useState('test'); // 測試模式預設密碼
 
   const handleLogin = async () => {
-    if (!account || !password) {
-      alert("請輸入帳號與密碼！");
+    if (!account) {
+      alert("請輸入帳號！");
       return;
     }
 
@@ -77,24 +74,21 @@ export default function LoginScreen() {
               />
             </View>
 
-            {/* 密碼輸入框 */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>密碼</Text>
-              <TextInput
-                ref={passwordInputRef} // 💡 綁定錨點
-                style={styles.input}
-                placeholder="請輸入您的密碼"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                autoCapitalize="none"
-                
-                // 💡 加上這兩行：按 Enter 直接觸發登入
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
-            </View>
+            {/* 密碼輸入框 (測試模式已註解，預設使用密碼 test) */}
+            {false && (
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>密碼</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="請輸入您的密碼"
+                  placeholderTextColor="#666"
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry
+                  autoCapitalize="none"
+                />
+              </View>
+            )}
 
             {/* 登入按鈕 */}
             <TouchableOpacity style={styles.button} onPress={handleLogin}>

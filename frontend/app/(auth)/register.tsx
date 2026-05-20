@@ -1,24 +1,20 @@
 // app/(auth)/register.tsx
-import React, { useState } from 'react';
-import { StyleSheet, View, Text, SafeAreaView, KeyboardAvoidingView, Platform, TouchableOpacity, ScrollView } from 'react-native';
 import { AuthInput } from '@/components/AuthInput';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import { router } from 'expo-router';
 import Colors from '@/constants/Colors';
+import { router } from 'expo-router';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function RegisterScreen() {
   const [nickname, setNickname] = useState('');
   const [account, setAccount] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  const [password, setPassword] = useState('test'); // 測試模式預設密碼
+  const [confirmPassword, setConfirmPassword] = useState('test'); // 測試模式預設密碼
 
   const handleRegister = async () => {
-    if (!nickname || !account || !password) {
-      alert("請填寫所有欄位！");
-      return;
-    }
-    if (password !== confirmPassword) {
-      alert("兩次輸入的密碼不一致！");
+    if (!nickname || !account) {
+      alert("請填寫暱稱與帳號欄位！");
       return;
     }
 
@@ -67,8 +63,13 @@ export default function RegisterScreen() {
                 <AuthInput label="帳號" required value={account} onChangeText={setAccount} placeholder="請輸入帳號" />
               </View>
               <View style={styles.column}>
-                <AuthInput label="密碼" required value={password} onChangeText={setPassword} placeholder="請輸入密碼" secureTextEntry />
-                <AuthInput label="再次輸入密碼" required value={confirmPassword} onChangeText={setConfirmPassword} placeholder="確認密碼" secureTextEntry />
+                {/* 測試模式：密碼輸入欄位已註解，預設密碼為 test */}
+                {false && (
+                  <>
+                    <AuthInput label="密碼" required value={password} onChangeText={setPassword} placeholder="請輸入密碼" secureTextEntry />
+                    <AuthInput label="再次輸入密碼" required value={confirmPassword} onChangeText={setConfirmPassword} placeholder="確認密碼" secureTextEntry />
+                  </>
+                )}
               </View>
             </View>
 
