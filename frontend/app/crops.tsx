@@ -1,0 +1,581 @@
+import React, { useState } from 'react';
+import {
+    Image,
+    SafeAreaView,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
+} from 'react-native';
+
+interface CropItem {
+  id: string;
+  name: string;
+  image: string;
+}
+
+export default function CropManagementScreen() {
+  // 控制目前顯示哪個畫面：'list' (列表頁) 或 'add' (新增作物頁)
+  const [currentView, setCurrentView] = useState<'list' | 'add'>('list');
+  
+  const [crops] = useState<CropItem[]>([
+    { id: '1', name: '草莓', image: 'https://images.unsplash.com/photo-1464965911861-746a04b4bca6?w=400' },
+    { id: '2', name: '菠菜', image: 'https://images.unsplash.com/photo-1576045057995-568f588f82fb?w=400' },
+    { id: '3', name: '藍莓', image: 'https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=400' },
+    { id: '4', name: '番茄', image: 'https://images.unsplash.com/photo-1595855759920-86582396756a?w=400' },
+    { id: '5', name: '香蕉', image: 'https://images.unsplash.com/photo-1571771894821-ce9b6c11b08e?w=400' },
+    { id: '6', name: '茄子', image: 'https://images.unsplash.com/photo-1615485290382-441e4d049cb5?w=400' },
+  ]);
+
+  const handleNavPress = (target: string) => {
+    if (target === '作物管理') {
+      setCurrentView('list');
+    } else {
+      alert('導航跳轉：正在前往 ' + target);
+    }
+  };
+
+  const handleCropPress = (cropName: string) => {
+    alert('作物詳情：已選取「' + cropName + '」，正在載入監控數據...');
+  };
+
+  const handleSaveCrop = () => {
+    alert('資料已儲存！');
+    setCurrentView('list'); // 儲存後自動返回列表
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      
+      {/* 頂部導航欄 (兩頁共用，維持 UI 一致性) */}
+      <View style={styles.header}>
+        <View style={styles.navBar}>
+          <TouchableOpacity style={styles.navTouch} onPress={() => handleNavPress('警示設定')}>
+            <Text style={styles.navText}>警示設定</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.navTouch} onPress={() => handleNavPress('環境總覽')}>
+            <Text style={styles.navText}>環境總覽</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.activeNavWrapper} onPress={() => setCurrentView('list')}>
+            <Text style={[styles.navText, styles.activeNavText]}>作物管理</Text>
+            <View style={styles.activeIndicator} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity style={styles.navTouch} onPress={() => handleNavPress('報表統計')}>
+            <Text style={styles.navText}>報表統計</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 右上角個人中心 */}
+        <TouchableOpacity style={styles.userButton} onPress={() => handleNavPress('個人中心')}>
+          <View style={styles.userIconCircle}>
+            <View style={styles.userIconHead} />
+            <View style={styles.userIconBody} />
+          </View>
+        </TouchableOpacity>
+      </View>
+
+      {/* ---------------- 畫面一：作物管理主列表 ---------------- */}
+      {currentView === 'list' && (
+        <View style={styles.cardContentContainer}>
+          <ScrollView contentContainerStyle={styles.cardGrid} showsVerticalScrollIndicator={false}>
+            {crops.map((item) => (
+              <TouchableOpacity 
+                key={item.id} 
+                style={styles.longCard}
+                onPress={() => handleCropPress(item.name)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.cardLeft}>
+                  <Image source={{ uri: item.image }} style={styles.cropImage} />
+                  <Text style={styles.cropName}>{item.name}</Text>
+                </View>
+                
+                <View style={styles.arrowCircle}>
+                  <Text style={styles.arrowText}>❯</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* 右下角：新增作物按鍵 */}
+          <View style={styles.fabContainer}>
+            <TouchableOpacity 
+              style={styles.fabButton} 
+              onPress={() => setCurrentView('add')} // 點擊切換至表單頁面
+              activeOpacity={0.8}
+            >
+              <Text style={styles.fabText}>新增作物</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
+
+      {/* ---------------- 畫面二：新增作物表單面板 (完全還原圖二視覺) ---------------- */}
+      {currentView === 'add' && (
+        <ScrollView contentContainerStyle={styles.formMainContainer} showsVerticalScrollIndicator={false}>
+          <View style={styles.formRowLayout}>
+            
+            {/* 左側：圖片與基礎文字欄位 */}
+            <View style={styles.formLeftColumn}>
+              {/* 圖片上傳區域 */}
+              <TouchableOpacity style={styles.imageUploadBox} activeOpacity={0.8}>
+                <View style={styles.uploadIconCircle}>
+                  <View style={styles.uploadIconPic} />
+                  <Text style={styles.uploadPlusText}>+</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* 作物名稱 */}
+              <View style={styles.inputCard}>
+                <Text style={styles.inputTitle}>作物名稱</Text>
+                <TextInput 
+                  style={styles.textInputStyle} 
+                  placeholder="請輸入作物名稱" 
+                  placeholderTextColor="#757575"
+                />
+              </View>
+
+              {/* 適合栽種月份 */}
+              <View style={styles.inputCard}>
+                <Text style={styles.inputTitle}>適合栽培月份</Text>
+                <TextInput 
+                  style={styles.textInputStyle} 
+                  placeholder="[11月~2月]" 
+                  placeholderTextColor="#757575"
+                />
+              </View>
+            </View>
+
+            {/* 右側：滑塊與週期設定 */}
+            <View style={styles.formRightColumn}>
+              {/* 適合濕度範圍 */}
+              <View style={styles.rightCardBox}>
+                <Text style={styles.inputTitle}>適合濕度範圍</Text>
+                <View style={styles.sliderContainer}>
+                  <View style={styles.sliderTrackLine} />
+                  <View style={styles.sliderActiveLine} />
+                  <View style={[styles.sliderNode, { left: '35%' }]} />
+                  <View style={[styles.sliderNode, { left: '55%' }]} />
+                </View>
+                <View style={styles.sliderLabelsRow}>
+                  <Text style={styles.sliderSideLabel}>0%</Text>
+                  <View style={styles.sliderCenterLabels}>
+                    <Text style={[styles.sliderValueText, { marginRight: 20 }]}>35%</Text>
+                    <Text style={styles.sliderValueText}>50%</Text>
+                  </View>
+                  <Text style={styles.sliderSideLabel}>100%</Text>
+                </View>
+              </View>
+
+              {/* 生長週期設定 */}
+              <View style={styles.rightCardBox}>
+                <Text style={styles.inputTitle}>生長週期設定</Text>
+                
+                {/* 下拉選單模擬樣式 */}
+                <TouchableOpacity style={styles.dropdownSelector}>
+                  <Text style={styles.dropdownText}>[80天]</Text>
+                  <Text style={styles.dropdownArrow}>▼</Text>
+                </TouchableOpacity>
+
+                {/* 下拉展開清單模擬 */}
+                <View style={styles.dropdownMenuMock}>
+                  <View style={[styles.menuItem, styles.menuItemActive]}><Text style={styles.menuItemTextActive}>[80天]</Text></View>
+                  <View style={styles.menuItem}><Text style={styles.menuItemText}>[120天]</Text></View>
+                  <View style={styles.menuItem}><Text style={styles.menuItemText}>[3個月]</Text></View>
+                  <View style={styles.menuItem}><Text style={styles.menuItemText}>[6個月]</Text></View>
+                  <View style={styles.menuItem}><Text style={styles.menuItemText}>[自定義]</Text></View>
+                </View>
+
+                {/* 自定義天數輸入框 */}
+                <View style={styles.customDayContainer}>
+                  <Text style={styles.customDayLabel}>[自定義]</Text>
+                  <View style={styles.customDayInputRow}>
+                    <View style={styles.dayNumBox}>
+                      <Text style={styles.dayNumText}>[20]</Text>
+                    </View>
+                    <Text style={styles.dayUnitText}>天</Text>
+                  </View>
+                </View>
+
+                {/* 儲存按鍵 */}
+                <TouchableOpacity style={styles.saveFormButton} onPress={handleSaveCrop}>
+                  <Text style={styles.saveButtonText}>儲存</Text>
+                </TouchableOpacity>
+
+              </View>
+            </View>
+
+          </View>
+        </ScrollView>
+      )}
+
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1f232b', 
+    paddingHorizontal: 24,
+    paddingTop: 10,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2d323f',
+    paddingVertical: 14,
+    marginBottom: 20,
+    position: 'relative',
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
+  },
+  navBar: {
+    flexDirection: 'row',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navTouch: {
+    paddingHorizontal: 20,
+  },
+  navText: {
+    color: '#9ca3af',
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  activeNavWrapper: {
+    paddingHorizontal: 20,
+    position: 'relative',
+    paddingBottom: 14,
+    marginBottom: -14,
+  },
+  activeNavText: {
+    color: '#ffffff',
+    fontWeight: '600',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    left: 20,
+    right: 20,
+    height: 2,
+    backgroundColor: '#437c6c',
+  },
+  userButton: {
+    position: 'absolute',
+    right: 10,
+    padding: 4,
+  },
+  userIconCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  userIconHead: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: '#ffffff',
+    marginTop: 2,
+  },
+  userIconBody: {
+    width: 14,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#ffffff',
+    marginTop: 2,
+  },
+  cardContentContainer: {
+    flex: 1,
+    width: '100%',
+  },
+  cardGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    maxWidth: 900,
+    width: '100%',
+    alignSelf: 'center',
+    paddingBottom: 100,
+  },
+  longCard: {
+    backgroundColor: '#2e333d', 
+    width: '49%', 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 16, 
+    paddingVertical: 14,
+    paddingHorizontal: 18,
+    marginBottom: 20,
+  },
+  cardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  cropImage: {
+    width: 85,
+    height: 70,
+    borderRadius: 14,
+  },
+  cropName: {
+    color: '#ffffff',
+    fontSize: 18,
+    fontWeight: '500',
+    marginLeft: 20,
+  },
+  arrowCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    opacity: 0.8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrowText: {
+    color: '#ffffff',
+    fontSize: 11,
+    fontWeight: 'bold',
+    marginLeft: 2, 
+  },
+  fabContainer: {
+    position: 'absolute',
+    bottom: 40,
+    right: '5%',
+  },
+  fabButton: {
+    backgroundColor: '#47695e', 
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  fabText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 1,
+  },
+
+  /* ---------------- 圖二：表單專用樣式區 ---------------- */
+  formMainContainer: {
+    width: '100%',
+    maxWidth: 900,
+    alignSelf: 'center',
+    paddingBottom: 60,
+  },
+  formRowLayout: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  formLeftColumn: {
+    width: '49%',
+  },
+  formRightColumn: {
+    width: '49%',
+  },
+  imageUploadBox: {
+    width: '100%',
+    height: 240,
+    backgroundColor: '#2e333d',
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  uploadIconCircle: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    borderWidth: 3,
+    borderColor: '#7f848e',
+    justifyContent: 'center',
+    alignItems: 'center',
+    position: 'relative',
+  },
+  uploadIconPic: {
+    width: 36,
+    height: 28,
+    borderWidth: 3,
+    borderColor: '#7f848e',
+    borderRadius: 6,
+  },
+  uploadPlusText: {
+    color: '#7f848e',
+    fontSize: 22,
+    fontWeight: 'bold',
+    position: 'absolute',
+    bottom: 12,
+    right: 14,
+    backgroundColor: '#2e333d',
+    paddingHorizontal: 2,
+  },
+  inputCard: {
+    backgroundColor: '#2e333d',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    marginBottom: 20,
+  },
+  inputTitle: {
+    color: '#bcbfcd',
+    fontSize: 15,
+    fontWeight: '500',
+    marginBottom: 12,
+  },
+  textInputStyle: {
+    backgroundColor: '#404654',
+    borderRadius: 10,
+    height: 40,
+    paddingHorizontal: 14,
+    color: '#ffffff',
+    fontSize: 14,
+  },
+  rightCardBox: {
+    backgroundColor: '#2e333d',
+    borderRadius: 24,
+    padding: 22,
+    marginBottom: 20,
+  },
+  sliderContainer: {
+    height: 30,
+    justifyContent: 'center',
+    position: 'relative',
+    marginTop: 10,
+  },
+  sliderTrackLine: {
+    height: 4,
+    backgroundColor: '#404654',
+    borderRadius: 2,
+    width: '100%',
+  },
+  sliderActiveLine: {
+    position: 'absolute',
+    height: 4,
+    backgroundColor: '#509e76',
+    left: '35%',
+    right: '45%',
+  },
+  sliderNode: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+    top: 9,
+    marginLeft: -6,
+  },
+  sliderLabelsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  sliderSideLabel: {
+    color: '#8e92a0',
+    fontSize: 14,
+  },
+  sliderCenterLabels: {
+    flexDirection: 'row',
+  },
+  sliderValueText: {
+    color: '#49b865',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  dropdownSelector: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#404654',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  dropdownText: {
+    color: '#8e92a0',
+    fontSize: 14,
+  },
+  dropdownArrow: {
+    color: '#8e92a0',
+    fontSize: 12,
+  },
+  dropdownMenuMock: {
+    backgroundColor: '#404654',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 20,
+  },
+  menuItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#363b47',
+  },
+  menuItemActive: {
+    backgroundColor: '#555d6e',
+  },
+  menuItemTextActive: {
+    color: '#bcbfcd',
+    fontSize: 14,
+  },
+  menuItemText: {
+    color: '#767b87',
+    fontSize: 14,
+  },
+  customDayContainer: {
+    marginBottom: 24,
+  },
+  customDayLabel: {
+    color: '#bcbfcd',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  customDayInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dayNumBox: {
+    backgroundColor: '#404654',
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    marginRight: 12,
+  },
+  dayNumText: {
+    color: '#8e92a0',
+    fontSize: 14,
+  },
+  dayUnitText: {
+    color: '#ffffff',
+    fontSize: 16,
+  },
+  saveFormButton: {
+    backgroundColor: '#4c7365',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  saveButtonText: {
+    color: '#ffffff',
+    fontSize: 15,
+    fontWeight: '500',
+    letterSpacing: 4,
+  },
+});
