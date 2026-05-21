@@ -1,14 +1,13 @@
 // app/index.tsx
-import { StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
 // 將 @/ 替換成 ../ 以確保打包工具絕對抓得到
 import { router } from 'expo-router';
-import PageShell from '../components/PageShell';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { colors, spacing, typography } from '../components/sharedStyles';
 
 export default function HomeScreen() {
   return (
-    <PageShell>
+    <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         
         {/* 中央圖標 */}
@@ -37,11 +36,15 @@ export default function HomeScreen() {
           />
         </View>
       </View>
-    </PageShell>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
   content: {
     flex: 1,
     justifyContent: 'space-between',

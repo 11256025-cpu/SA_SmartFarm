@@ -259,6 +259,6 @@ const styles = StyleSheet.create({
   cardCropNameTitle: { color: colors.text, fontSize: typography.large, fontWeight: 'bold', marginBottom: 4 },
   cardCropMetaText: { color: colors.muted, fontSize: typography.body },
   heartPulseBadge: { position: 'absolute', bottom: 16, right: 16, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4 },
-  dashedActionCard: { width: '31%', minWidth: 220, height: 260, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
+  dashedActionCard: { width: '31%', minWidth: 220, height: 275, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
   dashedActionText: { color: colors.muted, fontSize: typography.body, fontWeight: 'bold' }
 });
