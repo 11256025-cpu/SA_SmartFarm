@@ -1,152 +1,172 @@
-import { AuthInput } from '@/components/AuthInput';
-import { PrimaryButton } from '@/components/PrimaryButton';
+// app/(auth)/register.tsx
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import PageShell from '../../components/PageShell';
-import { colors, radii, spacing, typography } from '../../components/sharedStyles';
+import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function RegisterScreen() {
   const [nickname, setNickname] = useState('');
   const [account, setAccount] = useState('');
-  const [password] = useState('test');
-  const [confirmPassword] = useState('test');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
-  const handleRegister = async () => {
-    if (!nickname || !account) {
-      alert('請填寫暱稱與帳號欄位！');
-      return;
-    }
-
-    try {
-      const response = await fetch('http://localhost:3000/api/register', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          nickname,
-          username: account,
-          password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (data.success) {
-        alert('🎉 註冊成功！請登入');
-        router.replace('/(auth)/login');
-      } else {
-        alert('❌ 註冊失敗：' + data.message);
-      }
-    } catch (error) {
-      console.error('連線錯誤:', error);
-      alert('無法連線到伺服器，請確認後端已啟動！');
-    }
+  const handleRegister = () => {
+    console.log('註冊', { nickname, account, password, confirmPassword });
+    // 註冊成功後通常跳轉到登入
+    router.replace('/(auth)/login'); 
   };
 
   return (
-    <PageShell showNav={false}>
-      <KeyboardAvoidingView
+    <SafeAreaView style={styles.container}>
+      <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>註冊帳號</Text>
-
-            <View style={styles.row}>
-              <View style={styles.column}>
-                <AuthInput label="暱稱" required value={nickname} onChangeText={setNickname} placeholder="請輸入暱稱" />
-                <AuthInput label="帳號" required value={account} onChangeText={setAccount} placeholder="請輸入帳號" />
-              </View>
-              <View style={styles.column}>
-                {false && (
-                  <>
-                    <AuthInput label="密碼" required value={password} onChangeText={() => {}} placeholder="請輸入密碼" secureTextEntry />
-                    <AuthInput label="再次輸入密碼" required value={confirmPassword} onChangeText={() => {}} placeholder="確認密碼" secureTextEntry />
-                  </>
-                )}
-              </View>
+            {/* 標題區塊 */}
+            <View style={styles.header}>
+              <Text style={styles.title}>建立帳號</Text>
+              <Text style={styles.subtitle}>請填寫以下資訊以註冊您的智慧農場</Text>
             </View>
+            
+            {/* 表單區塊 */}
+            <View style={styles.form}>
+              {/* 兩列佈局 */}
+              <View style={styles.row}>
+                <View style={styles.column}>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>暱稱</Text>
+                    <TextInput style={styles.input} placeholder="請輸入暱稱" placeholderTextColor="#666" value={nickname} onChangeText={setNickname} />
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>帳號</Text>
+                    <TextInput style={styles.input} placeholder="請輸入帳號" placeholderTextColor="#666" value={account} onChangeText={setAccount} autoCapitalize="none" />
+                  </View>
+                </View>
+                <View style={styles.column}>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>密碼</Text>
+                    <TextInput style={styles.input} placeholder="請輸入密碼" placeholderTextColor="#666" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" />
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <Text style={styles.label}>再次輸入密碼</Text>
+                    <TextInput style={styles.input} placeholder="確認密碼" placeholderTextColor="#666" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoCapitalize="none" />
+                  </View>
+                </View>
+              </View>
 
-            <View style={styles.buttonContainer}>
-              <PrimaryButton
-                title="確認"
-                onPress={handleRegister}
-                containerStyle={styles.confirmButton}
-              />
-            </View>
+              {/* 註冊按鈕 */}
+              <TouchableOpacity style={styles.button} onPress={handleRegister}>
+                <Text style={styles.buttonText}>註冊</Text>
+              </TouchableOpacity>
 
-            <View style={styles.footerLinkContainer}>
-              <TouchableOpacity onPress={() => router.replace('/(auth)/login')}>
-                <Text style={styles.footerLinkText}>返回登入帳號</Text>
+              {/* 切換到登入頁面 */}
+              <TouchableOpacity 
+                onPress={() => router.replace('/(auth)/login')}
+                style={styles.switchButton}
+              >
+                <Text style={styles.switchText}>已經有帳號？立即登入</Text>
               </TouchableOpacity>
             </View>
           </View>
-
-          <Text style={styles.systemTitle}>智慧農場管理系統</Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </PageShell>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#151718', // 與登入頁相同的深色底色
+  },
   keyboardAvoidingView: {
     flex: 1,
-    width: '100%',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.xl,
-    minHeight: '100%',
+    padding: 24,
   },
   card: {
-    backgroundColor: colors.leftPanel,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
     width: '100%',
+    maxWidth: 550, // 註冊畫面有兩欄並排，比登入的 450 稍寬一點
+    alignSelf: 'center',
+    backgroundColor: '#1E2124', // 稍微亮一點的深灰色，營造卡片立體感
+    padding: 32,
+    borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
-  cardTitle: {
-    color: colors.text,
-    fontSize: typography.h1 + 2,
+  header: {
+    marginBottom: 40,
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 28,
     fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: spacing.xl,
+    color: '#FFFFFF',
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: '#999999',
+  },
+  form: {
+    width: '100%',
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   column: {
-    width: '48%',
+    width: '48%', // 兩列，中間預留間距
   },
-  buttonContainer: {
-    marginTop: spacing.xl,
+  inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    color: '#DDDDDD',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  input: {
+    backgroundColor: '#22252A',
+    color: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#33373E',
+  },
+  button: {
+    backgroundColor: '#5A8B73', // 搭配智慧農場的綠色系
+    paddingVertical: 14,
+    borderRadius: 8,
     alignItems: 'center',
+    marginTop: 10,
+    shadowColor: '#5A8B73',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
-  confirmButton: {
-    width: '60%',
-  },
-  footerLinkContainer: {
-    marginTop: spacing.lg,
-    alignItems: 'center',
-  },
-  footerLinkText: {
-    color: colors.primary,
-    fontSize: typography.body,
-  },
-  systemTitle: {
-    color: colors.text,
-    fontSize: typography.h2,
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
     fontWeight: 'bold',
-    marginTop: spacing.xl,
-    textAlign: 'center',
+  },
+  switchButton: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  switchText: {
+    color: '#5A8B73',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

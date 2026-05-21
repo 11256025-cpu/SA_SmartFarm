@@ -1,9 +1,9 @@
 // app/(auth)/_layout.tsx
-import React from 'react';
-import { Stack, router } from 'expo-router';
-import { Pressable } from 'react-native';
-import FontAwesome from '@expo/vector-icons/FontAwesome';
 import Colors from '@/constants/Colors';
+import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Stack, router } from 'expo-router';
+import React from 'react';
+import { Pressable } from 'react-native';
 
 export default function AuthLayout() {
   return (
@@ -17,8 +17,8 @@ export default function AuthLayout() {
         </Pressable>
       ),
     }}>
-      <Stack.Screen name="login" options={{ title: '登入' }} />
-      <Stack.Screen name="register" options={{ title: '註冊' }} />
+      <Stack.Screen name="login" options={{ title: '登入', headerShown: false }} />
+      <Stack.Screen name="register" options={{ title: '註冊', headerShown: false }} />
     </Stack>
   );
 }

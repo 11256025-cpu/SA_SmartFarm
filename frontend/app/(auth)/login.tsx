@@ -1,158 +1,205 @@
+// app/(auth)/login.tsx
 import { router } from 'expo-router';
-import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import PageShell from '../../components/PageShell';
-import { colors, radii, spacing, typography } from '../../components/sharedStyles';
+import React, { useRef, useState } from 'react'; // 💡 這裡幫你引入了 useRef
+import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
-  const [password] = useState('test');
+  const [password, setPassword] = useState('');
+
+  // 💡 建立一個密碼輸入框的錨點 (Ref)
+  const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
-    if (!account) {
-      alert('請輸入帳號！');
+    if (!account || !password) {
+      alert("請輸入帳號與密碼！");
       return;
     }
 
-    alert('✅ 測試模式登入成功！');
-    router.replace('/environment');
+    try {
+      // 這裡直接使用 localhost
+      const response = await fetch('http://localhost:3000/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: account, // 將前端的 account 轉成後端要的 username
+          password: password
+        })
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert("✅ 登入成功！");
+        router.replace('/environment');
+      } else {
+        alert("❌ 登入失敗：" + data.message);
+      }
+    } catch (error) {
+      console.error("連線錯誤:", error);
+      alert("無法連線到伺服器，請確認後端已啟動！");
+    }
   };
 
   return (
-    <PageShell showNav={false}>
+    <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoidingView}
+        style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
+          <View style={styles.card}>
+          
+          {/* 標題區塊 */}
           <View style={styles.header}>
             <Text style={styles.title}>歡迎回來</Text>
             <Text style={styles.subtitle}>請登入以管理您的智慧農場</Text>
           </View>
 
+          {/* 表單區塊 */}
           <View style={styles.form}>
+            {/* 帳號輸入框 */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>帳號</Text>
               <TextInput
                 style={styles.input}
                 placeholder="請輸入您的帳號"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor="#666"
                 value={account}
                 onChangeText={setAccount}
                 keyboardType="default"
                 autoCapitalize="none"
+                
+                // 💡 加上這兩行：按 Enter 自動跳到密碼欄位
+                returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
+              />
+            </View>
+
+            {/* 密碼輸入框 */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>密碼</Text>
+              <TextInput
+                ref={passwordInputRef} // 💡 綁定錨點
+                style={styles.input}
+                placeholder="請輸入您的密碼"
+                placeholderTextColor="#666"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+                autoCapitalize="none"
+                
+                // 💡 加上這兩行：按 Enter 直接觸發登入
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}
               />
             </View>
 
-            {false && (
-              <View style={styles.inputContainer}>
-                <Text style={styles.label}>密碼</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="請輸入您的密碼"
-                  placeholderTextColor={colors.muted}
-                  value={password}
-                  secureTextEntry
-                  autoCapitalize="none"
-                />
-              </View>
-            )}
-
+            {/* 登入按鈕 */}
             <TouchableOpacity style={styles.button} onPress={handleLogin}>
               <Text style={styles.buttonText}>登入</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
+            {/* 切換到註冊頁面 */}
+            <TouchableOpacity 
               onPress={() => router.push('/(auth)/register')}
               style={styles.switchButton}
             >
               <Text style={styles.switchText}>還沒有帳號？立即註冊</Text>
             </TouchableOpacity>
           </View>
+          </View>
+
         </ScrollView>
       </KeyboardAvoidingView>
-    </PageShell>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboardAvoidingView: {
+  container: {
     flex: 1,
-    width: '100%',
+    backgroundColor: '#151718', // 與首頁相同的深色底色
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: spacing.xl,
-    minHeight: '100%',
+    padding: 24,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 450,
+    alignSelf: 'center',
+    backgroundColor: '#1E2124', // 稍微亮一點的深灰色，營造卡片立體感
+    padding: 32,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
   },
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: 40,
     alignItems: 'center',
   },
   title: {
-    fontSize: typography.h1 + 8,
+    fontSize: 28,
     fontWeight: 'bold',
-    color: colors.text,
-    marginBottom: spacing.sm,
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
   subtitle: {
-    fontSize: typography.body,
-    color: colors.muted,
-    textAlign: 'center',
+    fontSize: 16,
+    color: '#999999',
   },
   form: {
     width: '100%',
-    maxWidth: 420,
-    alignSelf: 'center',
   },
   inputContainer: {
-    marginBottom: spacing.lg,
+    marginBottom: 20,
   },
   label: {
-    fontSize: typography.body,
-    color: colors.text,
-    marginBottom: spacing.sm,
+    fontSize: 14,
+    color: '#DDDDDD',
+    marginBottom: 8,
     fontWeight: '600',
   },
   input: {
-    backgroundColor: colors.leftPanel,
-    color: colors.text,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radii.md,
-    fontSize: typography.body,
+    backgroundColor: '#22252A',
+    color: '#FFFFFF',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    fontSize: 16,
     borderWidth: 1,
-    borderColor: colors.border,
-    ...Platform.select({ web: { cursor: 'text' } as any }),
+    borderColor: '#33373E',
   },
   button: {
-    backgroundColor: colors.primary,
-    paddingVertical: spacing.lg,
-    borderRadius: radii.md,
+    backgroundColor: '#5A8B73', // 搭配智慧農場的綠色系
+    paddingVertical: 14,
+    borderRadius: 8,
     alignItems: 'center',
-    marginTop: spacing.lg,
-    shadowColor: colors.primary,
+    marginTop: 20,
+    shadowColor: '#5A8B73',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    ...Platform.select({ web: { cursor: 'pointer' } as any }),
   },
   buttonText: {
-    color: colors.text,
-    fontSize: typography.body,
+    color: '#FFFFFF',
+    fontSize: 18,
     fontWeight: 'bold',
   },
   switchButton: {
-    marginTop: spacing.lg,
+    marginTop: 20,
     alignItems: 'center',
-    ...Platform.select({ web: { cursor: 'pointer' } as any }),
   },
   switchText: {
-    color: colors.primary,
-    fontSize: typography.body,
+    color: '#5A8B73',
+    fontSize: 14,
     fontWeight: '600',
   },
 });
