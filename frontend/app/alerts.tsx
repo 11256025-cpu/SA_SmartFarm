@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider'; // 引入雙滑塊套件
 import React, { useState } from 'react';
-import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
@@ -60,11 +60,14 @@ export default function AlertsScreen() {
   // 處理儲存設定到資料庫的邏輯
   const handleSaveSettings = async () => {
     try {
-      // ⚠️ 這裡請替換成你實際的後端 API 網址
-      const apiUrl = 'https://your-api-endpoint.com/api/alerts/settings';
+      console.log("🔘 點擊了儲存按鈕，準備發送 API...");
+      
+      // 改為你本地的後端 API 網址
+      const apiUrl = 'http://localhost:3000/api/alerts/settings';
       
       // 將前端的設定值打包
       const payload = {
+        userId: 1, // ⚠️ 測試用：暫時將資料綁定給 user_id 為 1 的使用者
         tempRange,
         humidRange,
         co2Range
@@ -81,14 +84,16 @@ export default function AlertsScreen() {
         body: JSON.stringify(payload)
       });
 
-      if (response.ok) {
-        Alert.alert('成功', '警示條件已成功儲存！');
+      const data = await response.json();
+
+      if (data.success) {
+        alert('✅ 警示條件已成功儲存！');
       } else {
-        Alert.alert('失敗', '儲存失敗，請稍後再試。');
+        alert('❌ 儲存失敗：' + (data.message || '請稍後再試。'));
       }
     } catch (error) {
       console.error('儲存設定時發生錯誤:', error);
-      Alert.alert('錯誤', '網路連線異常，無法儲存設定。');
+      alert('⚠️ 無法連線到伺服器，請確認後端已啟動！');
     }
   };
 

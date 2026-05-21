@@ -42,7 +42,11 @@ app.post('/api/register', (req, res) => {
     db.run(sql, [nickname, username, password], function(err) {
         if (err) {
             console.error(err.message);
-            return res.status(500).json({ success: false, message: "註冊失敗，帳號可能已經存在" });
+            // 檢查是不是因為帳號重複 (UNIQUE constraint failed) 導致的錯誤
+            if (err.message.includes('UNIQUE constraint failed: USER.account')) {
+                return res.status(409).json({ success: false, message: "這個帳號已經有人使用了，請換一個！" });
+            }
+            return res.status(500).json({ success: false, message: "伺服器發生未知的錯誤" });
         }
         // 註冊成功，回傳自動產生的 使用者編號 (this.lastID)
         res.json({ success: true, message: "註冊成功！", userId: this.lastID });
@@ -65,6 +69,53 @@ app.post('/api/login', (req, res) => {
         } else {
             // 找不到資料，帳號或密碼錯誤
             res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
+        }
+    });
+});
+
+// 4. 儲存/更新警示設定 API
+app.post('/api/alerts/settings', (req, res) => {
+    const { userId, tempRange, humidRange, co2Range } = req.body;
+    
+    console.log(`📡 收到來自使用者 ${userId} 的警示設定請求:`, { tempRange, humidRange, co2Range });
+
+    if (!userId) {
+        return res.status(400).json({ success: false, message: "缺少使用者 ID" });
+    }
+
+    // 將陣列轉換成字串存入資料庫 (例如 "[15,35]")
+    const tempStr = JSON.stringify(tempRange);
+    const soilStr = JSON.stringify(humidRange);
+    const co2Str = JSON.stringify(co2Range);
+
+    // 先檢查該使用者是否已經有設定紀錄
+    const checkSql = `SELECT * FROM WARNING_RANGE WHERE user_id = ?`;
+    db.get(checkSql, [userId], (err, row) => {
+        if (err) {
+            console.error("❌ 查詢資料庫失敗:", err.message);
+            return res.status(500).json({ success: false, message: "查詢資料庫失敗" });
+        }
+
+        if (row) {
+            // 如果資料庫已經有該使用者的設定，就執行更新
+            const updateSql = `UPDATE WARNING_RANGE SET temp_warning = ?, soil_warning = ?, co2_warning = ? WHERE user_id = ?`;
+            db.run(updateSql, [tempStr, soilStr, co2Str, userId], function(err) {
+                if (err) {
+                    console.error("❌ 更新設定失敗:", err.message);
+                    return res.status(500).json({ success: false, message: "更新設定失敗" });
+                }
+                res.json({ success: true, message: "設定更新成功！" });
+            });
+        } else {
+            // 如果沒有紀錄，就新增一筆
+            const insertSql = `INSERT INTO WARNING_RANGE (user_id, temp_warning, soil_warning, co2_warning) VALUES (?, ?, ?, ?)`;
+            db.run(insertSql, [userId, tempStr, soilStr, co2Str], function(err) {
+                if (err) {
+                    console.error("❌ 新增設定失敗:", err.message);
+                    return res.status(500).json({ success: false, message: "新增設定失敗" });
+                }
+                res.json({ success: true, message: "設定新增成功！" });
+            });
         }
     });
 });
