@@ -89,7 +89,7 @@ export default function EnvironmentScreen() {
     <View style={styles.controlRow}>
       <View style={styles.controlLabelGroup}>
         <Text style={styles.controlLabel}>{label}</Text>
-        <Text style={styles.controlValueText}>{value.toLocaleString()} {unit}</Text>
+        <Text style={styles.controlValueText}>{Math.round(value).toLocaleString()} {unit}</Text>
       </View>
       <Slider
         style={styles.slider}
@@ -97,6 +97,7 @@ export default function EnvironmentScreen() {
         maximumValue={max}
         value={value}
         onValueChange={setter}
+        step={1}
         minimumTrackTintColor={colors.primary}
         maximumTrackTintColor={colors.border}
         thumbTintColor={colors.primary}
@@ -142,21 +143,21 @@ export default function EnvironmentScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>溫度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, temperature > 35 && styles.textAlert]}>{temperature} <Text style={styles.cardUnit}>°C</Text></Text>
+                  <Text style={[styles.cardValue, temperature > 35 && styles.textAlert]}>{Math.round(temperature)} <Text style={styles.cardUnit}>°C</Text></Text>
                 </View>
               </View>
 
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>光照強度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, light < 20000 && styles.textAlert]}>{light.toLocaleString()} <Text style={styles.cardUnit}>lux</Text></Text>
+                  <Text style={[styles.cardValue, light < 20000 && styles.textAlert]}>{Math.round(light).toLocaleString()} <Text style={styles.cardUnit}>lux</Text></Text>
                 </View>
               </View>
 
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>土壤濕度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, humidity < 30 && styles.textAlert]}>{humidity} <Text style={styles.cardUnit}>%</Text></Text>
+                  <Text style={[styles.cardValue, humidity < 30 && styles.textAlert]}>{Math.round(humidity)} <Text style={styles.cardUnit}>%</Text></Text>
                 </View>
                 <TouchableOpacity style={styles.actionButton} onPress={() => setHumidity(50)}>
                   <Text style={styles.actionButtonText}>手動灌溉</Text>
@@ -166,7 +167,7 @@ export default function EnvironmentScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>二氧化碳濃度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, co2 > 1000 && styles.textAlert]}>{co2} <Text style={styles.cardUnit}>ppm</Text></Text>
+                  <Text style={[styles.cardValue, co2 > 1000 && styles.textAlert]}>{Math.round(co2)} <Text style={styles.cardUnit}>ppm</Text></Text>
                 </View>
               </View>
             </View>
