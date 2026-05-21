@@ -1,5 +1,5 @@
 // app/index.tsx
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Image, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 // 將 @/ 替換成 ../ 以確保打包工具絕對抓得到
 import { router } from 'expo-router';
 import { PrimaryButton } from '../components/PrimaryButton';
@@ -12,19 +12,11 @@ export default function HomeScreen() {
         
         {/* 中央圖標 */}
         <View style={styles.logoContainer}>
-          {/* ⚠️ 注意：我先把 Image 註解掉了！
-              如果你的 assets/images 裡面還沒有 farm_logo.png，
-              保留 require 會導致整個畫面崩潰 (Unmatched Route)。
-              等你把圖片放進去後，再把這段解開註解，並使用 ../ 路徑 */}
-          
-          {/* <Image 
+          <Image 
             source={require('../assets/images/farm_logo.png')} 
             style={styles.logo} 
             resizeMode="contain"
-          /> 
-          */}
-          
-          <Text style={{ color: colors.text }}>農場 Logo 預定地</Text>
+          />
         </View>
 
         {/* 底部內容佈局 */}

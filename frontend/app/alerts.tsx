@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider'; // 引入雙滑塊套件
 import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
@@ -57,6 +57,41 @@ export default function AlertsScreen() {
     </View>
   );
 
+  // 處理儲存設定到資料庫的邏輯
+  const handleSaveSettings = async () => {
+    try {
+      // ⚠️ 這裡請替換成你實際的後端 API 網址
+      const apiUrl = 'https://your-api-endpoint.com/api/alerts/settings';
+      
+      // 將前端的設定值打包
+      const payload = {
+        tempRange,
+        humidRange,
+        co2Range
+      };
+
+      // 發送 HTTP POST 或 PUT 請求給後端
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // 如果你的 API 需要身分驗證，可以在這裡加上 Token：
+          // 'Authorization': `Bearer ${your_token_here}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (response.ok) {
+        Alert.alert('成功', '警示條件已成功儲存！');
+      } else {
+        Alert.alert('失敗', '儲存失敗，請稍後再試。');
+      }
+    } catch (error) {
+      console.error('儲存設定時發生錯誤:', error);
+      Alert.alert('錯誤', '網路連線異常，無法儲存設定。');
+    }
+  };
+
   return (
     <PageShell
       active="alerts"
@@ -75,7 +110,7 @@ export default function AlertsScreen() {
           {renderRangeSetting('環境溫度', tempRange, setTempRange, 0, 50, '°C')}
           {renderRangeSetting('土壤濕度', humidRange, setHumidRange, 0, 100, '%')}
           {renderRangeSetting('二氧化碳', co2Range, setCo2Range, 0, 2000, 'ppm')}
-          <View style={styles.saveContainer}><TouchableOpacity style={styles.saveButton}><Text style={styles.saveButtonText}>儲存警示條件</Text></TouchableOpacity></View>
+          <View style={styles.saveContainer}><TouchableOpacity style={styles.saveButton} onPress={handleSaveSettings}><Text style={styles.saveButtonText}>儲存警示條件</Text></TouchableOpacity></View>
         </>
       )}
     />

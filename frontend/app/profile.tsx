@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { router } from 'expo-router';
+import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
@@ -32,7 +33,15 @@ export default function ProfileScreen() {
             <Text style={styles.value}>{user.role}</Text>
           </View>
 
-          <TouchableOpacity style={styles.signOutButton}>
+        <TouchableOpacity 
+          style={styles.signOutButton}
+          onPress={() => {
+            Alert.alert('登出', '確定要登出嗎？', [
+              { text: '取消', style: 'cancel' },
+              { text: '確定', onPress: () => router.replace('/') }
+            ]);
+          }}
+        >
             <Text style={styles.signOutText}>登出</Text>
           </TouchableOpacity>
         </View>
