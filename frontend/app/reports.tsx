@@ -32,6 +32,38 @@ export default function ReportsScreen() {
     }
   };
 
+  // 計算起訖之間所有日期並標記
+const getMarkedDates = () => {
+  if (!startDate) return {};
+  
+  const marked: any = {};
+  
+  // 只選了起始日
+  if (!endDate) {
+    marked[startDate] = { startingDay: true, endingDay: true, color: '#2e4f45', textColor: '#FFF' };
+    return marked;
+  }
+
+  // 起訖都選了，填滿中間
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const current = new Date(start);
+
+  while (current <= end) {
+    const dateStr = current.toISOString().split('T')[0];
+    if (dateStr === startDate) {
+      marked[dateStr] = { startingDay: true, color: '#2e4f45', textColor: '#FFF' };
+    } else if (dateStr === endDate) {
+      marked[dateStr] = { endingDay: true, color: '#2e4f45', textColor: '#FFF' };
+    } else {
+      marked[dateStr] = { color: '#47695e', textColor: '#FFF' };
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  return marked;
+};
+
   const toggleChart = (key: string) => {
     setSelectedCharts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
@@ -58,7 +90,7 @@ export default function ReportsScreen() {
             <View key="calendar-container" style={styles.calendarWrapper}>
               <Calendar
                 markingType={'period'}
-                markedDates={{ [startDate]: { startingDay: true, color: colors.secondary }, [endDate]: { endingDay: true, color: colors.secondary } }}
+                markedDates={getMarkedDates()}
                 onDayPress={handleDayPress}
                 theme={{ calendarBackground: colors.leftPanel, dayTextColor: colors.text, monthTextColor: colors.text, arrowColor: colors.secondary }}
               />
