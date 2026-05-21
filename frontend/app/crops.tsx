@@ -214,9 +214,9 @@ export default function CropsScreen() {
 }
 
 const pickerCustomStyles = StyleSheet.create({
-  inputIOS: { color: colors.text, fontSize: typography.body, paddingVertical: 10, paddingHorizontal: 12 },
-  inputAndroid: { color: colors.text, fontSize: typography.body, paddingHorizontal: 12, paddingVertical: 8 },
-  inputWeb: { color: colors.text, fontSize: typography.body, paddingHorizontal: 12, paddingVertical: 10, outlineStyle: 'none' as any }
+  inputIOS: { color: '#000000', fontSize: typography.body, paddingVertical: 10, paddingHorizontal: 12 },
+  inputAndroid: { color: '#000000', fontSize: typography.body, paddingHorizontal: 12, paddingVertical: 8 },
+  inputWeb: { color: '#000000', fontSize: typography.body, paddingHorizontal: 12, paddingVertical: 10, outlineStyle: 'none' as any }
 });
 
 const styles = StyleSheet.create({
