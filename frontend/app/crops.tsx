@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
 
   // 作物列表卡片樣式
   cardGridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingHorizontal: spacing.xl, paddingBottom: 60 },
-  cropCard: { width: '31%', minWidth: 220, height: 260, backgroundColor: colors.card, borderRadius: radii.lg, padding: 14, borderWidth: 1, borderColor: colors.border, position: 'relative', overflow: 'hidden' },
+  cropCard: { width: '31%', minWidth: 220, height: 275, backgroundColor: colors.card, borderRadius: radii.lg, padding: 14, borderWidth: 1, borderColor: colors.border, position: 'relative', overflow: 'hidden' },
   cardImageLayer: { height: 130, borderRadius: radii.md, overflow: 'hidden', marginBottom: 14 },
   cardRealRenderImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   cardIllustrationPlaceholder: { backgroundColor: colors.border, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
