@@ -216,10 +216,10 @@ export default function EnvironmentScreen() {
           <Text style={styles.godPanelHeader}><FontAwesome name="sliders" size={18} color="#FFF" /> 控制面板</Text>
           <Text style={styles.godPanelSub}>模擬硬體回傳數值</Text>
           <View style={styles.godPanelControls}>
-            {renderSliderControl('溫度', temperature, setTemperature, 0, 50, '°C')}
-            {renderSliderControl('光照強度', light, setLight, 0, 200000, 'lux')}
+            {renderSliderControl('溫度', temperature, setTemperature, -30, 60, '°C')}
+            {renderSliderControl('光照強度', light, setLight, 0, 150000, 'lux')}
             {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%')}
-            {renderSliderControl('CO2 濃度', co2, setCo2, 0, 2000, 'ppm')}
+            {renderSliderControl('CO2 濃度', co2, setCo2, 300, 2000, 'ppm')}
           </View>
         </>
       )}
