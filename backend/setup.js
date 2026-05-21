@@ -1,56 +1,65 @@
 const sqlite3 = require('sqlite3').verbose();
-const db = new sqlite3.Database('./farm.db');
 
-db.serialize(() => {
-  // 1. 使用者帳號表
-  db.run(`CREATE TABLE IF NOT EXISTS USER (
-    使用者編號 INTEGER PRIMARY KEY AUTOINCREMENT,
-    使用者暱稱 TEXT NOT NULL,
-    使用者帳號 TEXT UNIQUE NOT NULL,
-    使用者密碼 TEXT NOT NULL
-  )`);
-
-  // 2. 使用者自訂作物表
-  db.run(`CREATE TABLE IF NOT EXISTS CROP (
-    作物編號 INTEGER PRIMARY KEY AUTOINCREMENT,
-    使用者編號 INTEGER,
-    作物名稱 TEXT NOT NULL,
-    適合月份 TEXT,
-    適合土壤濕度 REAL,
-    生長週期 INTEGER,
-    FOREIGN KEY (使用者編號) REFERENCES USER(使用者編號)
-  )`);
-
-  // 3. 環境歷史紀錄表
-  db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
-    紀錄編號 INTEGER PRIMARY KEY AUTOINCREMENT,
-    使用者編號 INTEGER,
-    紀錄時間 DATETIME DEFAULT CURRENT_TIMESTAMP,
-    歷史溫度 REAL,
-    歷史土壤濕度 REAL,
-    歷史光照強度 REAL,
-    歷史二氧化碳強度 REAL,
-    FOREIGN KEY (使用者編號) REFERENCES USER(使用者編號)
-  )`);
-
-  // 4. 溫室灌溉設定表
-  db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION (
-    使用者編號 INTEGER PRIMARY KEY,
-    灌溉頻率 INTEGER,
-    灌溉時長 INTEGER,
-    FOREIGN KEY (使用者編號) REFERENCES USER(使用者編號)
-  )`);
-
-  // 5. 溫室警示設定表
-  db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
-    使用者編號 INTEGER PRIMARY KEY,
-    溫度警示範圍 TEXT,
-    土壤警示範圍 TEXT,
-    二氧化碳警示範圍 TEXT,
-    FOREIGN KEY (使用者編號) REFERENCES USER(使用者編號)
-  )`);
-
-  console.log("資料庫與 5 張資料表建立完成！");
+// 連線並建立 SQLite 資料庫
+const db = new sqlite3.Database('./farm.db', (err) => {
+    if (err) {
+        console.error("資料庫連線失敗:", err.message);
+    } else {
+        console.log("成功連線到 SQLite 資料庫 (farm.db)！開始建立資料表...");
+    }
 });
 
-db.close();
+db.serialize(() => {
+    // 1. 建立 USER 表格 (使用者資訊)
+    db.run(`CREATE TABLE IF NOT EXISTS USER (
+        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        nickname TEXT NOT NULL,
+        account TEXT UNIQUE NOT NULL,
+        password TEXT NOT NULL
+    )`);
+
+    // 2. 建立 CROP 表格 (作物資訊)
+    db.run(`CREATE TABLE IF NOT EXISTS CROP (
+        crop_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        crop_name TEXT NOT NULL,
+        suitable_month TEXT,
+        suitable_soil_moisture REAL,
+        growth_cycle TEXT,
+        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+    )`);
+
+    // 3. 建立 IRRIGATION 表格 (灌溉設定)
+    db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION (
+        irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        irrigation_freq TEXT,
+        irrigation_duration INTEGER,
+        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+    )`);
+
+    // 4. 建立 WARNING_RANGE 表格 (警示範圍)
+    db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
+        warning_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        temp_warning TEXT,
+        soil_warning TEXT,
+        co2_warning TEXT,
+        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+    )`);
+
+    // 5. 建立 HISTORY 表格 (歷史紀錄)
+    db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
+        record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        record_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+        history_temp REAL,
+        history_soil_moisture REAL,
+        history_light REAL,
+        history_co2 REAL,
+        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+    )`, () => {
+        console.log("✅ 所有資料表建立完成！");
+        db.close();
+    });
+});

@@ -38,7 +38,7 @@ app.post('/api/register', (req, res) => {
     }
 
     // 寫入資料庫的 SQL 語法 (? 是為了防止隱碼攻擊)
-    const sql = `INSERT INTO USER (使用者暱稱, 使用者帳號, 使用者密碼) VALUES (?, ?, ?)`;
+    const sql = `INSERT INTO USER (nickname, account, password) VALUES (?, ?, ?)`;
     db.run(sql, [nickname, username, password], function(err) {
         if (err) {
             console.error(err.message);
@@ -53,7 +53,7 @@ app.post('/api/register', (req, res) => {
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
 
-    const sql = `SELECT * FROM USER WHERE 使用者帳號 = ? AND 使用者密碼 = ?`;
+    const sql = `SELECT * FROM USER WHERE account = ? AND password = ?`;
     db.get(sql, [username, password], (err, row) => {
         if (err) {
             return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
