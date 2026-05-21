@@ -13,10 +13,12 @@ const NAV_ITEMS: { key: NavKey; label: string; route: string }[] = [
 ];
 
 type Props = {
-  active: NavKey;
+  active?: string;
+  onBellPress?: () => void;
+  hasUnreadAlerts?: boolean;
 };
 
-export default function TopNav({ active }: Props) {
+export default function TopNav({ active, onBellPress, hasUnreadAlerts }: Props) {
   return (
     <View style={styles.topNav}>
       <View style={styles.navLeftGroup}>
@@ -32,9 +34,15 @@ export default function TopNav({ active }: Props) {
           </TouchableOpacity>
         ))}
       </View>
-      <TouchableOpacity style={styles.navRightGroup} onPress={() => router.replace('/profile')}>
-        <FontAwesome name="user-o" size={24} color="#FFF" />
-      </TouchableOpacity>
+      <View style={styles.navRightGroup}>
+        <TouchableOpacity style={styles.bellButton} onPress={() => onBellPress ? onBellPress() : alert('目前沒有新的通知')}>
+          <FontAwesome name="bell-o" size={22} color="#FFF" />
+          {hasUnreadAlerts && <View style={styles.redDot} />}
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => router.replace('/profile')}>
+          <FontAwesome name="user-o" size={24} color="#FFF" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -59,6 +67,9 @@ const styles = StyleSheet.create({
   navRightGroup: {
     position: 'absolute',
     right: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 24,
   },
   navItem: {
     paddingBottom: 8,
@@ -76,5 +87,17 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  bellButton: {
+    position: 'relative',
+  },
+  redDot: {
+    position: 'absolute',
+    top: -2,
+    right: -4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF4D4F',
   },
 });

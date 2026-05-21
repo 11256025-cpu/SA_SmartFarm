@@ -1,46 +1,42 @@
-// app/(auth)/login.tsx
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import PageShell from '../../components/PageShell';
+import { colors, radii, spacing, typography } from '../../components/sharedStyles';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
-  const [password, setPassword] = useState('test'); // 測試模式預設密碼
+  const [password] = useState('test');
 
   const handleLogin = async () => {
     if (!account) {
-      alert("請輸入帳號！");
+      alert('請輸入帳號！');
       return;
     }
 
-    // 測試模式：直接登入，不連後端資料庫
-    alert("✅ 測試模式登入成功！");
+    alert('✅ 測試模式登入成功！');
     router.replace('/environment');
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <PageShell showNav={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1 }}
+        style={styles.keyboardAvoidingView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          
-          {/* 標題區塊 */}
           <View style={styles.header}>
             <Text style={styles.title}>歡迎回來</Text>
             <Text style={styles.subtitle}>請登入以管理您的智慧農場</Text>
           </View>
 
-          {/* 表單區塊 */}
           <View style={styles.form}>
-            {/* 帳號輸入框 */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>帳號</Text>
               <TextInput
                 style={styles.input}
                 placeholder="請輸入您的帳號"
-                placeholderTextColor="#666"
+                placeholderTextColor={colors.muted}
                 value={account}
                 onChangeText={setAccount}
                 keyboardType="default"
@@ -50,116 +46,113 @@ export default function LoginScreen() {
               />
             </View>
 
-            {/* 密碼輸入框 (測試模式已註解，預設使用密碼 test) */}
             {false && (
               <View style={styles.inputContainer}>
                 <Text style={styles.label}>密碼</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="請輸入您的密碼"
-                  placeholderTextColor="#666"
+                  placeholderTextColor={colors.muted}
                   value={password}
-                  onChangeText={setPassword}
                   secureTextEntry
                   autoCapitalize="none"
                 />
               </View>
             )}
 
-            {/* 登入按鈕 */}
             <TouchableOpacity style={styles.button} onPress={handleLogin}>
               <Text style={styles.buttonText}>登入</Text>
             </TouchableOpacity>
 
-            {/* 切換到註冊頁面 */}
-            <TouchableOpacity 
+            <TouchableOpacity
               onPress={() => router.push('/(auth)/register')}
               style={styles.switchButton}
             >
               <Text style={styles.switchText}>還沒有帳號？立即註冊</Text>
             </TouchableOpacity>
           </View>
-
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </PageShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  keyboardAvoidingView: {
     flex: 1,
-    backgroundColor: '#151718', // 與首頁相同的深色底色
+    width: '100%',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 24,
+    padding: spacing.xl,
+    minHeight: '100%',
   },
   header: {
-    marginBottom: 40,
+    marginBottom: spacing.xl,
     alignItems: 'center',
   },
   title: {
-    fontSize: 28,
+    fontSize: typography.h1 + 8,
     fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 8,
+    color: colors.text,
+    marginBottom: spacing.sm,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#999999',
+    fontSize: typography.body,
+    color: colors.muted,
+    textAlign: 'center',
   },
   form: {
     width: '100%',
-    maxWidth: 420,        // 💡 限制表單最大寬度，網頁版就不會肥肥的
-    alignSelf: 'center',   // 💡 讓表單在畫面上靠中對齊
+    maxWidth: 420,
+    alignSelf: 'center',
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   label: {
-    fontSize: 14,
-    color: '#DDDDDD',
-    marginBottom: 8,
+    fontSize: typography.body,
+    color: colors.text,
+    marginBottom: spacing.sm,
     fontWeight: '600',
   },
   input: {
-    backgroundColor: '#22252A',
-    color: '#FFFFFF',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    fontSize: 16,
+    backgroundColor: colors.leftPanel,
+    color: colors.text,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radii.md,
+    fontSize: typography.body,
     borderWidth: 1,
-    borderColor: '#33373E',
-    ...Platform.select({ web: { cursor: 'text' } as any }), // 💡 讓網頁游標變輸入型
+    borderColor: colors.border,
+    ...Platform.select({ web: { cursor: 'text' } as any }),
   },
   button: {
-    backgroundColor: '#5A8B73', // 搭配智慧農場的綠色系
-    paddingVertical: 14,
-    borderRadius: 8,
+    backgroundColor: colors.primary,
+    paddingVertical: spacing.lg,
+    borderRadius: radii.md,
     alignItems: 'center',
-    marginTop: 20,
-    shadowColor: '#5A8B73',
+    marginTop: spacing.lg,
+    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
-    ...Platform.select({ web: { cursor: 'pointer' } as any }), // 💡 讓網頁按鈕有滑鼠小手
+    ...Platform.select({ web: { cursor: 'pointer' } as any }),
   },
   buttonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: colors.text,
+    fontSize: typography.body,
     fontWeight: 'bold',
   },
   switchButton: {
-    marginTop: 20,
+    marginTop: spacing.lg,
     alignItems: 'center',
-    ...Platform.select({ web: { cursor: 'pointer' } as any }), // 💡 讓超連結也有滑鼠小手
+    ...Platform.select({ web: { cursor: 'pointer' } as any }),
   },
   switchText: {
-    color: '#5A8B73',
-    fontSize: 14,
+    color: colors.primary,
+    fontSize: typography.body,
     fontWeight: '600',
   },
 });

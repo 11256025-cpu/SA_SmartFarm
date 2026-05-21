@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 import {
   Image,
-  SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from 'react-native';
-import TopNav from '../components/TopNav';
+import PageShell from '../components/PageShell';
+import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
 interface CropItem {
   id: string;
@@ -48,15 +47,11 @@ export default function CropManagementScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      
-      {/* 頂部導航欄 (兩頁共用，維持 UI 一致性) */}
-      <TopNav active="crops" />
-
+    <PageShell active="crops">
       {/* ---------------- 畫面一：作物管理主列表 ---------------- */}
       {currentView === 'list' && (
         <View style={styles.cardContentContainer}>
-          <ScrollView contentContainerStyle={styles.cardGrid} showsVerticalScrollIndicator={false}>
+          <View style={styles.cardGrid}>
             {crops.map((item) => (
               <TouchableOpacity 
                 key={item.id} 
@@ -74,7 +69,7 @@ export default function CropManagementScreen() {
                 </View>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
 
           {/* 右下角：新增作物按鍵 */}
           <View style={styles.fabContainer}>
@@ -91,7 +86,7 @@ export default function CropManagementScreen() {
 
       {/* ---------------- 畫面二：新增作物表單面板 (完全還原圖二視覺) ---------------- */}
       {currentView === 'add' && (
-        <ScrollView contentContainerStyle={styles.formMainContainer} showsVerticalScrollIndicator={false}>
+        <View style={styles.formMainContainer}>
           <View style={styles.formRowLayout}>
             
             {/* 左側：圖片與基礎文字欄位 */}
@@ -185,93 +180,13 @@ export default function CropManagementScreen() {
             </View>
 
           </View>
-        </ScrollView>
+        </View>
       )}
-
-    </SafeAreaView>
+    </PageShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1f232b', 
-    paddingHorizontal: 24,
-    paddingTop: 10,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2d323f',
-    paddingVertical: 14,
-    marginBottom: 20,
-    position: 'relative',
-    maxWidth: 900,
-    width: '100%',
-    alignSelf: 'center',
-  },
-  navBar: {
-    flexDirection: 'row',
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  navTouch: {
-    paddingHorizontal: 20,
-  },
-  navText: {
-    color: '#9ca3af',
-    fontSize: 15,
-    fontWeight: '500',
-  },
-  activeNavWrapper: {
-    paddingHorizontal: 20,
-    position: 'relative',
-    paddingBottom: 14,
-    marginBottom: -14,
-  },
-  activeNavText: {
-    color: '#ffffff',
-    fontWeight: '600',
-  },
-  activeIndicator: {
-    position: 'absolute',
-    bottom: 0,
-    left: 20,
-    right: 20,
-    height: 2,
-    backgroundColor: '#437c6c',
-  },
-  userButton: {
-    position: 'absolute',
-    right: 10,
-    padding: 4,
-  },
-  userIconCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: '#ffffff',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  userIconHead: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#ffffff',
-    marginTop: 2,
-  },
-  userIconBody: {
-    width: 14,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#ffffff',
-    marginTop: 2,
-  },
   cardContentContainer: {
     flex: 1,
     width: '100%',
@@ -286,15 +201,15 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   longCard: {
-    backgroundColor: '#2e333d', 
+    backgroundColor: colors.card, 
     width: '49%', 
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    borderRadius: 16, 
+    borderRadius: radii.lg, 
     paddingVertical: 14,
     paddingHorizontal: 18,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   cardLeft: {
     flexDirection: 'row',
@@ -303,11 +218,11 @@ const styles = StyleSheet.create({
   cropImage: {
     width: 85,
     height: 70,
-    borderRadius: 14,
+    borderRadius: radii.md,
   },
   cropName: {
-    color: '#ffffff',
-    fontSize: 18,
+    color: colors.text,
+    fontSize: typography.large,
     fontWeight: '500',
     marginLeft: 20,
   },
@@ -316,13 +231,13 @@ const styles = StyleSheet.create({
     height: 26,
     borderRadius: 13,
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: colors.text,
     opacity: 0.8,
     justifyContent: 'center',
     alignItems: 'center',
   },
   arrowText: {
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 11,
     fontWeight: 'bold',
     marginLeft: 2, 
@@ -333,13 +248,13 @@ const styles = StyleSheet.create({
     right: '5%',
   },
   fabButton: {
-    backgroundColor: '#47695e', 
+    backgroundColor: colors.primary, 
     paddingHorizontal: 24,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: radii.md,
   },
   fabText: {
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '500',
     letterSpacing: 1,
@@ -366,18 +281,18 @@ const styles = StyleSheet.create({
   imageUploadBox: {
     width: '100%',
     height: 240,
-    backgroundColor: '#2e333d',
-    borderRadius: 24,
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   uploadIconCircle: {
     width: 90,
     height: 90,
     borderRadius: 45,
     borderWidth: 3,
-    borderColor: '#7f848e',
+    borderColor: colors.subMuted,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -386,45 +301,45 @@ const styles = StyleSheet.create({
     width: 36,
     height: 28,
     borderWidth: 3,
-    borderColor: '#7f848e',
+    borderColor: colors.subMuted,
     borderRadius: 6,
   },
   uploadPlusText: {
-    color: '#7f848e',
+    color: colors.subMuted,
     fontSize: 22,
     fontWeight: 'bold',
     position: 'absolute',
     bottom: 12,
     right: 14,
-    backgroundColor: '#2e333d',
+    backgroundColor: colors.card,
     paddingHorizontal: 2,
   },
   inputCard: {
-    backgroundColor: '#2e333d',
-    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
     paddingHorizontal: 20,
     paddingVertical: 16,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   inputTitle: {
-    color: '#bcbfcd',
+    color: colors.muted,
     fontSize: 15,
     fontWeight: '500',
     marginBottom: 12,
   },
   textInputStyle: {
-    backgroundColor: '#404654',
-    borderRadius: 10,
+    backgroundColor: colors.border,
+    borderRadius: radii.md,
     height: 40,
     paddingHorizontal: 14,
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 14,
   },
   rightCardBox: {
-    backgroundColor: '#2e333d',
-    borderRadius: 24,
+    backgroundColor: colors.card,
+    borderRadius: radii.lg,
     padding: 22,
-    marginBottom: 20,
+    marginBottom: spacing.lg,
   },
   sliderContainer: {
     height: 30,
@@ -434,14 +349,14 @@ const styles = StyleSheet.create({
   },
   sliderTrackLine: {
     height: 4,
-    backgroundColor: '#404654',
+    backgroundColor: colors.border,
     borderRadius: 2,
     width: '100%',
   },
   sliderActiveLine: {
     position: 'absolute',
     height: 4,
-    backgroundColor: '#509e76',
+    backgroundColor: colors.primary,
     left: '35%',
     right: '45%',
   },
@@ -450,7 +365,7 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#ffffff',
+    backgroundColor: colors.text,
     top: 9,
     marginLeft: -6,
   },
@@ -460,14 +375,14 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sliderSideLabel: {
-    color: '#8e92a0',
+    color: colors.subMuted,
     fontSize: 14,
   },
   sliderCenterLabels: {
     flexDirection: 'row',
   },
   sliderValueText: {
-    color: '#49b865',
+    color: colors.primary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -475,22 +390,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#404654',
+    backgroundColor: colors.border,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,
     marginBottom: 8,
   },
   dropdownText: {
-    color: '#8e92a0',
+    color: colors.subMuted,
     fontSize: 14,
   },
   dropdownArrow: {
-    color: '#8e92a0',
+    color: colors.subMuted,
     fontSize: 12,
   },
   dropdownMenuMock: {
-    backgroundColor: '#404654',
+    backgroundColor: colors.border,
     borderRadius: 10,
     overflow: 'hidden',
     marginBottom: 20,
@@ -499,24 +414,24 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#363b47',
+    borderBottomColor: colors.card,
   },
   menuItemActive: {
-    backgroundColor: '#555d6e',
+    backgroundColor: colors.subMuted,
   },
   menuItemTextActive: {
-    color: '#bcbfcd',
+    color: colors.muted,
     fontSize: 14,
   },
   menuItemText: {
-    color: '#767b87',
+    color: colors.subMuted,
     fontSize: 14,
   },
   customDayContainer: {
     marginBottom: 24,
   },
   customDayLabel: {
-    color: '#bcbfcd',
+    color: colors.muted,
     fontSize: 14,
     marginBottom: 8,
   },
@@ -525,29 +440,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dayNumBox: {
-    backgroundColor: '#404654',
+    backgroundColor: colors.border,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 8,
     marginRight: 12,
   },
   dayNumText: {
-    color: '#8e92a0',
+    color: colors.subMuted,
     fontSize: 14,
   },
   dayUnitText: {
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 16,
   },
   saveFormButton: {
-    backgroundColor: '#4c7365',
-    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderRadius: radii.md,
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 10,
   },
   saveButtonText: {
-    color: '#ffffff',
+    color: colors.text,
     fontSize: 15,
     fontWeight: '500',
     letterSpacing: 4,

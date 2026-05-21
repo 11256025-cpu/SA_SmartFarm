@@ -1,81 +1,78 @@
-// app/(auth)/register.tsx
 import { AuthInput } from '@/components/AuthInput';
 import { PrimaryButton } from '@/components/PrimaryButton';
-import Colors from '@/constants/Colors';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import PageShell from '../../components/PageShell';
+import { colors, radii, spacing, typography } from '../../components/sharedStyles';
 
 export default function RegisterScreen() {
   const [nickname, setNickname] = useState('');
   const [account, setAccount] = useState('');
-  const [password, setPassword] = useState('test'); // 測試模式預設密碼
-  const [confirmPassword, setConfirmPassword] = useState('test'); // 測試模式預設密碼
+  const [password] = useState('test');
+  const [confirmPassword] = useState('test');
 
   const handleRegister = async () => {
     if (!nickname || !account) {
-      alert("請填寫暱稱與帳號欄位！");
+      alert('請填寫暱稱與帳號欄位！');
       return;
     }
 
     try {
-      // 這裡直接使用 localhost
       const response = await fetch('http://localhost:3000/api/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          nickname: nickname,
-          username: account, // 將前端的 account 轉成後端要的 username
-          password: password
-        })
+          nickname,
+          username: account,
+          password,
+        }),
       });
 
       const data = await response.json();
 
       if (data.success) {
-        alert("🎉 註冊成功！請登入");
-        router.replace('/(auth)/login'); 
+        alert('🎉 註冊成功！請登入');
+        router.replace('/(auth)/login');
       } else {
-        alert("❌ 註冊失敗：" + data.message);
+        alert('❌ 註冊失敗：' + data.message);
       }
     } catch (error) {
-      console.error("連線錯誤:", error);
-      alert("無法連線到伺服器，請確認後端已啟動！");
+      console.error('連線錯誤:', error);
+      alert('無法連線到伺服器，請確認後端已啟動！');
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+    <PageShell showNav={false}>
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.card}>
             <Text style={styles.cardTitle}>註冊帳號</Text>
-            
-            {/* 兩列佈局實作 */}
+
             <View style={styles.row}>
               <View style={styles.column}>
                 <AuthInput label="暱稱" required value={nickname} onChangeText={setNickname} placeholder="請輸入暱稱" />
                 <AuthInput label="帳號" required value={account} onChangeText={setAccount} placeholder="請輸入帳號" />
               </View>
               <View style={styles.column}>
-                {/* 測試模式：密碼輸入欄位已註解，預設密碼為 test */}
                 {false && (
                   <>
-                    <AuthInput label="密碼" required value={password} onChangeText={setPassword} placeholder="請輸入密碼" secureTextEntry />
-                    <AuthInput label="再次輸入密碼" required value={confirmPassword} onChangeText={setConfirmPassword} placeholder="確認密碼" secureTextEntry />
+                    <AuthInput label="密碼" required value={password} onChangeText={() => {}} placeholder="請輸入密碼" secureTextEntry />
+                    <AuthInput label="再次輸入密碼" required value={confirmPassword} onChangeText={() => {}} placeholder="確認密碼" secureTextEntry />
                   </>
                 )}
               </View>
             </View>
 
             <View style={styles.buttonContainer}>
-              <PrimaryButton 
-                title="確認" 
+              <PrimaryButton
+                title="確認"
                 onPress={handleRegister}
                 containerStyle={styles.confirmButton}
               />
@@ -87,75 +84,69 @@ export default function RegisterScreen() {
               </TouchableOpacity>
             </View>
           </View>
-          
-          {/* 左下角系統標題 */}
+
           <Text style={styles.systemTitle}>智慧農場管理系統</Text>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </PageShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.dark.background,
-  },
   keyboardAvoidingView: {
     flex: 1,
+    width: '100%',
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    padding: 30,
-    paddingBottom: 100, // 預留給底部的標題空間
+    padding: spacing.xl,
+    minHeight: '100%',
   },
   card: {
-    backgroundColor: Colors.dark.cardBackground,
-    borderRadius: 20,
-    padding: 30,
+    backgroundColor: colors.leftPanel,
+    borderRadius: radii.lg,
+    padding: spacing.xl,
     width: '100%',
-    elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowRadius: 4,
   },
   cardTitle: {
-    color: '#FFFFFF',
-    fontSize: 22,
+    color: colors.text,
+    fontSize: typography.h1 + 2,
     fontWeight: 'bold',
     textAlign: 'center',
-    marginBottom: 25,
+    marginBottom: spacing.xl,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
   column: {
-    width: '48%', // 兩列，中間預留間距
+    width: '48%',
   },
   buttonContainer: {
-    marginTop: 20,
+    marginTop: spacing.xl,
     alignItems: 'center',
   },
   confirmButton: {
     width: '60%',
   },
   footerLinkContainer: {
-    marginTop: 20,
+    marginTop: spacing.lg,
     alignItems: 'center',
   },
   footerLinkText: {
-    color: '#3498DB',
-    fontSize: 14,
+    color: colors.primary,
+    fontSize: typography.body,
   },
   systemTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
+    color: colors.text,
+    fontSize: typography.h2,
     fontWeight: 'bold',
-    position: 'absolute',
-    bottom: 30,
-    left: 30,
+    marginTop: spacing.xl,
+    textAlign: 'center',
   },
 });

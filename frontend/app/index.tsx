@@ -1,13 +1,14 @@
 // app/index.tsx
-import { StyleSheet, View, Text, Image, SafeAreaView } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 // 將 @/ 替換成 ../ 以確保打包工具絕對抓得到
-import { PrimaryButton } from '../components/PrimaryButton';
 import { router } from 'expo-router';
-import Colors from '../constants/Colors';
+import PageShell from '../components/PageShell';
+import { PrimaryButton } from '../components/PrimaryButton';
+import { colors, spacing, typography } from '../components/sharedStyles';
 
 export default function HomeScreen() {
   return (
-    <SafeAreaView style={styles.container}>
+    <PageShell>
       <View style={styles.content}>
         
         {/* 中央圖標 */}
@@ -24,7 +25,7 @@ export default function HomeScreen() {
           /> 
           */}
           
-          <Text style={{ color: 'white' }}>農場 Logo 預定地</Text>
+          <Text style={{ color: colors.text }}>農場 Logo 預定地</Text>
         </View>
 
         {/* 底部內容佈局 */}
@@ -36,20 +37,17 @@ export default function HomeScreen() {
           />
         </View>
       </View>
-    </SafeAreaView>
+    </PageShell>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#151718',
-  },
   content: {
     flex: 1,
     justifyContent: 'space-between',
-    padding: 20,
+    padding: spacing.xl,
     paddingTop: 50,
+    minHeight: 500, // ensure content takes space in scrollview
   },
   logoContainer: {
     flex: 1,
@@ -59,17 +57,17 @@ const styles = StyleSheet.create({
   logo: {
     width: 200,
     height: 200,
-    tintColor: '#FFFFFF',
+    tintColor: colors.text,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
   systemTitle: {
-    color: '#FFFFFF',
-    fontSize: 20,
+    color: colors.text,
+    fontSize: typography.h2,
     fontWeight: 'bold',
   },
 });
