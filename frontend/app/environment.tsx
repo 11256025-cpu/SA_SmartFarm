@@ -4,6 +4,7 @@ import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select'; // 需安裝
+import TopNav from '../components/TopNav';
 
 export default function EnvironmentScreen() {
   // 1. 環境狀態變數
@@ -46,33 +47,13 @@ export default function EnvironmentScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TopNav active="environment" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.mainLayout}>
           
           {/* ================= 左側：主畫面 ================= */}
           <View style={styles.leftColumn}>
-            
-            {/* === 頂部導覽列 (已修正靠左與靠右) === */}
-            <View style={styles.topNav}>
-              <View style={styles.navLeftGroup}>
-                <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => router.replace('/environment')}>
-                  <Text style={styles.navTextActive}>環境總覽</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/alerts')}>
-                  <Text style={styles.navText}>警示設定</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/crops')}>
-                  <Text style={styles.navText}>作物管理</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/reports')}>
-                  <Text style={styles.navText}>報表統計</Text>
-                </TouchableOpacity>
-              </View>
 
-              <TouchableOpacity style={styles.navRightGroup} onPress={() => router.replace('/profile')}>
-                <FontAwesome name="user-o" size={24} color="#FFF" />
-              </TouchableOpacity>
-            </View>
 
             {/* === 紅色警示訊息 === */}
             {showWarning && (

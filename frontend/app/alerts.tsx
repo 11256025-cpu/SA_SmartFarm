@@ -1,8 +1,8 @@
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider'; // 引入雙滑塊套件
-import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import TopNav from '../components/TopNav';
 
 export default function AlertsScreen() {
   // 1. 警示閾值狀態改為陣列：[下限, 上限] (即允許的安全範圍)
@@ -58,29 +58,11 @@ export default function AlertsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {/* === 頂部導覽列 === */}
+      <TopNav active="alerts" />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.mainLayout}>
-          
-          {/* === 頂部導覽列 === */}
-          <View style={styles.topNav}>
-            <View style={styles.navLeftGroup}>
-              <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/environment')}>
-                <Text style={styles.navText}>環境總覽</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => router.replace('/alerts')}>
-                <Text style={styles.navTextActive}>警示設定</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/crops')}>
-                <Text style={styles.navText}>作物管理</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/reports')}>
-                <Text style={styles.navText}>報表統計</Text>
-              </TouchableOpacity>
-            </View>
-            <TouchableOpacity style={styles.navRightGroup} onPress={() => router.replace('/profile')}>
-              <FontAwesome name="user-o" size={24} color="#FFF" />
-            </TouchableOpacity>
-          </View>
+        
 
           {/* === 主要內容區 (左右兩欄) === */}
           <View style={styles.contentRow}>

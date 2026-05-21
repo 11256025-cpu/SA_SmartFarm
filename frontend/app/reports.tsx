@@ -1,9 +1,9 @@
 import { FontAwesome } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { Dimensions, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { LineChart } from 'react-native-chart-kit';
+import TopNav from '../components/TopNav';
 
 const screenWidth = Dimensions.get('window').width;
 
@@ -45,26 +45,7 @@ export default function ReportsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.topNav}>
-        <View style={styles.navLeftGroup}>
-          <TouchableOpacity style={[styles.navItem, styles.navItemActive]} onPress={() => router.replace('/environment')}>
-            <Text style={styles.navTextActive}>環境總覽</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/alerts')}>
-            <Text style={styles.navText}>警示設定</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/crops')}>
-            <Text style={styles.navText}>作物管理</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.navItem} onPress={() => router.replace('/reports')}>
-            <Text style={styles.navText}>報表統計</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity style={styles.navRightGroup} onPress={() => router.replace('/profile')}>
-          <FontAwesome name="user-o" size={24} color="#FFF" />
-        </TouchableOpacity>
-      </View>
+      <TopNav active="reports" />
 
       <View style={styles.mainLayout}>
         <View style={styles.leftPanel}>

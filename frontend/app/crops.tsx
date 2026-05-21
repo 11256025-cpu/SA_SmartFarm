@@ -1,14 +1,15 @@
 import React, { useState } from 'react';
 import {
-    Image,
-    SafeAreaView,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Image,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import TopNav from '../components/TopNav';
 
 interface CropItem {
   id: string;
@@ -50,34 +51,7 @@ export default function CropManagementScreen() {
     <SafeAreaView style={styles.container}>
       
       {/* 頂部導航欄 (兩頁共用，維持 UI 一致性) */}
-      <View style={styles.header}>
-        <View style={styles.navBar}>
-          <TouchableOpacity style={styles.navTouch} onPress={() => handleNavPress('警示設定')}>
-            <Text style={styles.navText}>警示設定</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.navTouch} onPress={() => handleNavPress('環境總覽')}>
-            <Text style={styles.navText}>環境總覽</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.activeNavWrapper} onPress={() => setCurrentView('list')}>
-            <Text style={[styles.navText, styles.activeNavText]}>作物管理</Text>
-            <View style={styles.activeIndicator} />
-          </TouchableOpacity>
-          
-          <TouchableOpacity style={styles.navTouch} onPress={() => handleNavPress('報表統計')}>
-            <Text style={styles.navText}>報表統計</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* 右上角個人中心 */}
-        <TouchableOpacity style={styles.userButton} onPress={() => handleNavPress('個人中心')}>
-          <View style={styles.userIconCircle}>
-            <View style={styles.userIconHead} />
-            <View style={styles.userIconBody} />
-          </View>
-        </TouchableOpacity>
-      </View>
+      <TopNav active="crops" />
 
       {/* ---------------- 畫面一：作物管理主列表 ---------------- */}
       {currentView === 'list' && (
