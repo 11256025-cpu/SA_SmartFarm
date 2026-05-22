@@ -1,15 +1,64 @@
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider'; // 引入雙滑塊套件
-import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
+// 💡 自動判斷執行環境，避免 localhost 在實機上連不到
+// 如果是 iOS 模擬器用 localhost，Android 模擬器用 10.0.2.2
+// 如果你用實體手機 Expo Go 測試，請直接手動改成你電腦的 IP (例如: 'http://192.168.1.100:3000')
+const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
 export default function AlertsScreen() {
-  // 1. 警示閾值狀態改為陣列：[下限, 上限] (即允許的安全範圍)
+  // 1. 警示閾值狀態：[下限, 上限]
   const [tempRange, setTempRange] = useState([15, 35]);
   const [humidRange, setHumidRange] = useState([30, 80]);
   const [co2Range, setCo2Range] = useState([400, 1000]);
+  const [loading, setLoading] = useState(true);
+
+  // 啟動時讀取後端儲存的使用者設定，並套用到 state
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        let uid = await AsyncStorage.getItem('userId');
+        
+        // 測試防呆：如果目前還沒做登入、AsyncStorage 是空的，預設先給它 '1' 去撈資料庫
+        if (!uid) {
+          uid = '1';
+        }
+
+        console.log(`📡 正在向後端請求使用者 ${uid} 的警示設定...`);
+        const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${uid}`);
+        const data = await resp.json();
+        
+        if (data.success && data.settings) {
+          const s = data.settings;
+          
+          // 💡 防呆機制：確保後端傳回來的資料不是 null 且長度為 2 才更新
+          if (Array.isArray(s.tempRange) && s.tempRange.length === 2) {
+            setTempRange([Number(s.tempRange[0]), Number(s.tempRange[1])]);
+          }
+          if (Array.isArray(s.humidRange) && s.humidRange.length === 2) {
+            setHumidRange([Number(s.humidRange[0]), Number(s.humidRange[1])]);
+          }
+          if (Array.isArray(s.co2Range) && s.co2Range.length === 2) {
+            setCo2Range([Number(s.co2Range[0]), Number(s.co2Range[1])]);
+          }
+          console.log("✅ 成功從資料庫載入設定並套用到畫面！");
+        } else {
+          console.log("ℹ️ 該使用者在資料庫尚無設定紀錄，使用前端預設值。");
+        }
+      } catch (e) {
+        console.warn('❌ 載入使用者警示設定失敗：', e);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSettings();
+  }, []);
 
   // 模擬警示紀錄數據
   const [alertLogs, setAlertLogs] = useState([
@@ -62,24 +111,20 @@ export default function AlertsScreen() {
     try {
       console.log("🔘 點擊了儲存按鈕，準備發送 API...");
       
-      // 改為你本地的後端 API 網址
-      const apiUrl = 'http://localhost:3000/api/alerts/settings';
+      const apiUrl = `${BASE_URL}/api/alerts/settings`;
       
-      // 將前端的設定值打包
+      const uid = await AsyncStorage.getItem('userId');
       const payload = {
-        userId: 1, // ⚠️ 測試用：暫時將資料綁定給 user_id 為 1 的使用者
+        userId: uid ? Number(uid) : 1, // 若沒有 userId 則回退到 1
         tempRange,
-        humidRange,
+        humidRange, // 對應後端的 humidRange
         co2Range
       };
 
-      // 發送 HTTP POST 或 PUT 請求給後端
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          // 如果你的 API 需要身分驗證，可以在這裡加上 Token：
-          // 'Authorization': `Bearer ${your_token_here}`
         },
         body: JSON.stringify(payload)
       });
@@ -87,15 +132,21 @@ export default function AlertsScreen() {
       const data = await response.json();
 
       if (data.success) {
-        alert('✅ 警示條件已成功儲存！');
+        alert('✅ 警示條件已成功儲存到資料庫！');
       } else {
         alert('❌ 儲存失敗：' + (data.message || '請稍後再試。'));
       }
     } catch (error) {
       console.error('儲存設定時發生錯誤:', error);
-      alert('⚠️ 無法連線到伺服器，請確認後端已啟動！');
+      alert('⚠️ 無法連線到伺服器，請確認後端已啟動！且 IP 設定正確。');
     }
   };
+
+  if (loading) {
+    return (
+      <PageShell active="alerts" left={<Text style={{color: '#fff'}}>載入中...</Text>} right={<></>} />
+    );
+  }
 
   return (
     <PageShell
@@ -122,6 +173,7 @@ export default function AlertsScreen() {
   );
 }
 
+// ... styles 保持不變 ...
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   scrollContent: { flexGrow: 1, alignItems: 'center' },
@@ -129,22 +181,8 @@ const styles = StyleSheet.create({
   contentRow: { flexDirection: 'row', gap: 30, width: '100%' },
   logSection: { width: '38%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
   settingSection: { width: '62%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
-  
-  // 導覽列
-  topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: 30, width: '100%' },
-  navLeftGroup: { flexDirection: 'row', gap: 25, alignItems: 'center', justifyContent: 'center' },
-  navRightGroup: { position: 'absolute', right: 10 },
-  navItem: { paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  navItemActive: { borderBottomColor: colors.primary },
-  navText: { color: colors.muted, fontSize: 16 },
-  navTextActive: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-
-  // 內容區排版 (改為兩欄對分)
-  
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { color: colors.text, fontSize: 20, fontWeight: 'bold' },
-  
-  // 紀錄列表樣式
   logItem: { 
     flexDirection: 'row', 
     backgroundColor: colors.card, 
@@ -159,8 +197,6 @@ const styles = StyleSheet.create({
   logMsg: { color: colors.text, fontSize: 15, fontWeight: '600' },
   logTime: { color: colors.subMuted, fontSize: 12, marginTop: 4 },
   emptyText: { color: colors.subMuted, textAlign: 'center', marginTop: 80, lineHeight: 22 },
-
-  // 設定卡片樣式
   settingCard: { 
     backgroundColor: colors.leftPanel, 
     borderRadius: radii.md, 
@@ -170,12 +206,9 @@ const styles = StyleSheet.create({
   settingHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
   settingLabel: { color: colors.text, fontWeight: 'bold', fontSize: 16 },
   rangeValueText: { color: colors.primary, fontWeight: 'bold', fontSize: 15 },
-  
   sliderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 15 },
   limitText: { color: colors.subMuted, fontSize: 13, width: 30, textAlign: 'center' },
-  
   helperText: { color: colors.muted, fontSize: 12, marginTop: 10, textAlign: 'center' },
-
   saveContainer: { alignItems: 'flex-end', marginTop: 10 },
   saveButton: { backgroundColor: colors.primary, paddingVertical: 12, paddingHorizontal: 30, borderRadius: radii.md },
   saveButtonText: { color: '#FFF', fontWeight: 'bold', fontSize: 15 },

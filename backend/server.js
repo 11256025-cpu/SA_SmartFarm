@@ -19,7 +19,7 @@ const db = new sqlite3.Database('./farm.db', sqlite3.OPEN_READWRITE, (err) => {
 });
 
 // ==========================================
-//                API 路由區塊
+//                 API 路由區塊
 // ==========================================
 
 // 1. 測試用 API (打開瀏覽器可以確認伺服器有沒有活著)
@@ -73,11 +73,11 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-// 4. 儲存/更新警示設定 API
+// 4. 儲存/更新警示設定 API (POST)
 app.post('/api/alerts/settings', (req, res) => {
     const { userId, tempRange, humidRange, co2Range } = req.body;
     
-    console.log(`📡 收到來自使用者 ${userId} 的警示設定請求:`, { tempRange, humidRange, co2Range });
+    console.log(`📡 收到來自使用者 ${userId} 的儲存警示設定請求:`, { tempRange, humidRange, co2Range });
 
     if (!userId) {
         return res.status(400).json({ success: false, message: "缺少使用者 ID" });
@@ -120,7 +120,51 @@ app.post('/api/alerts/settings', (req, res) => {
     });
 });
 
-// --- 啟動伺服器 ---
+// 4b. 取得使用者警示設定 API (GET)（回傳上次儲存的警示範圍給前端畫面）
+app.get('/api/alerts/settings', (req, res) => {
+    const userId = req.query.userId;
+    
+    console.log(`📡 收到查詢要求，正在讀取使用者 ${userId} 的警示設定...`);
+
+    if (!userId) {
+        return res.status(400).json({ success: false, message: "缺少 userId" });
+    }
+
+    const sql = `SELECT * FROM WARNING_RANGE WHERE user_id = ?`;
+    db.get(sql, [userId], (err, row) => {
+        if (err) {
+            console.error('❌ 查詢警示設定失敗:', err.message);
+            return res.status(500).json({ success: false, message: '查詢警示設定失敗' });
+        }
+
+        if (!row) {
+            // 使用者尚未有任何設定
+            return res.json({ success: true, settings: null });
+        }
+
+        try {
+            const tempRange = row.temp_warning ? JSON.parse(row.temp_warning) : null;
+            const humidRange = row.soil_warning ? JSON.parse(row.soil_warning) : null;
+            const co2Range = row.co2_warning ? JSON.parse(row.co2_warning) : null;
+
+            return res.json({
+                success: true,
+                settings: {
+                    tempRange,
+                    humidRange,
+                    co2Range
+                }
+            });
+        } catch (e) {
+            console.error('❌ 解析設定時發生錯誤:', e.message);
+            return res.status(500).json({ success: false, message: '解析設定失敗' });
+        }
+    });
+});
+
+// ==========================================
+//               --- 啟動伺服器 ---
+// ==========================================
 app.listen(port, () => {
     console.log(`🚀 後端伺服器已啟動：http://localhost:${port}`);
 });

@@ -1,6 +1,7 @@
 // app/(auth)/login.tsx
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react'; // 💡 這裡幫你引入了 useRef
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
@@ -32,7 +33,41 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (data.success) {
-        alert("✅ 登入成功！");
+        // 取得使用者 id（在資料庫 schema 中為 user_id）
+        const userId = data.user?.user_id ?? data.user?.id ?? null;
+
+        // 將 userId 存到本地，以便其他頁面 (如 Alerts) 讀取
+        if (userId) {
+          try {
+            await AsyncStorage.setItem('userId', String(userId));
+          } catch (e) {
+            console.warn('無法儲存 userId 到 AsyncStorage', e);
+          }
+        }
+
+        // 嘗試向後端查詢該使用者上次儲存的警示設定
+        if (userId) {
+          try {
+            const resp = await fetch(`http://localhost:3000/api/alerts/settings?userId=${userId}`);
+            const settingsData = await resp.json();
+            if (settingsData.success && settingsData.settings) {
+              const s = settingsData.settings;
+              const temp = s.tempRange ? s.tempRange.join(', ') : '無';
+              const humid = s.humidRange ? s.humidRange.join(', ') : '無';
+              const co2 = s.co2Range ? s.co2Range.join(', ') : '無';
+              alert(`✅ 登入成功！\n上次儲存的設定：\n溫度: [${temp}]\n濕度: [${humid}]\nCO2: [${co2}]`);
+            } else {
+              alert('✅ 登入成功！\n使用者尚未有先前的設定。');
+            }
+          } catch (err) {
+            console.warn('取得上次設定失敗：', err);
+            alert('✅ 登入成功！\n但無法取得上次設定（請稍後再試）');
+          }
+        } else {
+          alert('✅ 登入成功！');
+        }
+
+        // 導向主畫面
         router.replace('/environment');
       } else {
         alert("❌ 登入失敗：" + data.message);
