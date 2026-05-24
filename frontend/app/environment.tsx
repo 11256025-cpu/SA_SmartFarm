@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -40,7 +40,6 @@ export default function EnvironmentScreen() {
   // 4. 滑入動畫邏輯
   const isVisible = activeAlerts.length > 0 && !hideNotification;
   useEffect(() => {
-    // isVisible 為 true 則滑入 (toValue: 0)，false 則滑出 (toValue: 400)
     Animated.spring(slideAnim, {
       toValue: isVisible ? 0 : 400,
       useNativeDriver: true,
@@ -48,6 +47,33 @@ export default function EnvironmentScreen() {
       friction: 7,
     }).start();
   }, [isVisible, slideAnim]);
+
+  // 5. 儲存設定連動資料庫
+  const handleSaveSchedule = async () => {
+    try {
+      // 💡 如果是實機測試，請將 localhost 改為你電腦的局域網路 IP (例如 'http://192.168.1.100:3000/api/schedule')
+      const response = await fetch('http://localhost:3000/api/schedule', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          frequency: frequency,
+          duration: duration,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        alert('儲存成功！排程已同步至資料庫。');
+      } else {
+        alert(`儲存失敗: ${data.message || '未知錯誤'}`);
+      }
+    } catch (error) {
+      console.error('儲存排程時發生錯誤:', error);
+      alert('無法連接到後端伺服器，請檢查網路連線或確認後端服務已啟動。');
+    }
+  };
 
   const getAlertContent = (type: string) => {
     switch (type) {
@@ -105,21 +131,37 @@ export default function EnvironmentScreen() {
     </View>
   );
 
+  // 下拉選單樣式
   const pickerSelectStyles = StyleSheet.create({
     inputIOS: {
-      color: 'black',
-      paddingHorizontal: 8,
+      color: '#000000',          // 黑色文字
+      paddingHorizontal: 12,
       fontSize: typography.body,
-      height: 32,
+      height: 36,
+      backgroundColor: 'transparent',
     },
     inputAndroid: {
-      color: 'black',
-      paddingHorizontal: 8,
+      color: '#000000',          // 黑色文字
+      paddingHorizontal: 12,
       fontSize: typography.body,
-      height: 32,
+      height: 36,
+      backgroundColor: 'transparent',
+    },
+    inputWeb: {
+      color: '#000000',          // 黑色文字
+      paddingHorizontal: 12,
+      fontSize: typography.body,
+      height: 36,
+      backgroundColor: 'transparent',
+      borderWidth: 0,            // 拔除 Web 原生邊框
+      outlineStyle: 'none',      // 拔除網頁點擊時的外框線
+      appearance: 'none',
+      WebkitAppearance: 'none',
+      MozAppearance: 'none',
+      cursor: 'pointer',
     },
     placeholder: {
-      color: colors.subMuted,
+      color: '#999999',
     },
   });
 
@@ -137,7 +179,6 @@ export default function EnvironmentScreen() {
         hasUnreadAlerts={activeAlerts.length > 0}
         left={(
           <>
-          {/* 維持原有左側內容 */}
           <View style={styles.leftColumn}>
             <View style={styles.gridContainer}>
               <View style={styles.card}>
@@ -176,6 +217,8 @@ export default function EnvironmentScreen() {
 
             <View style={styles.scheduleCard}>
               <Text style={styles.scheduleTitle}>自動灌溉排程</Text>
+              
+              {/* 第一排：灌溉頻率 */}
               <View style={styles.scheduleRow}>
                 <Text style={styles.scheduleLabel}>灌溉頻率</Text>
                 <Text style={styles.scheduleText}>每隔</Text>
@@ -185,11 +228,13 @@ export default function EnvironmentScreen() {
                     onValueChange={(value) => setFrequency(value)}
                     items={[{ label: '1', value: 1 },{ label: '2', value: 2 },{ label: '4', value: 4 },{ label: '8', value: 8 },{ label: '12', value: 12 },{ label: '24', value: 24 }]}
                     style={pickerSelectStyles}
+                    useNativeAndroidPickerStyle={false}
                   />
                 </View>
                 <Text style={styles.scheduleText}>分鐘灌溉一次</Text>
               </View>
 
+              {/* 第二排：單次時長 ＋ 儲存設定（維持在同一排，並透過 flex 彈性推至最右邊） */}
               <View style={styles.scheduleRow}>
                 <Text style={styles.scheduleLabel}>單次時長</Text>
                 <Text style={styles.scheduleText}>一次灌溉</Text>
@@ -199,11 +244,14 @@ export default function EnvironmentScreen() {
                     onValueChange={(value) => setDuration(value)}
                     items={[{ label: '1', value: 1 },{ label: '5', value: 5 },{ label: '10', value: 10 },{ label: '20', value: 20 },{ label: '30', value: 30 },{ label: '60', value: 60 }]}
                     style={pickerSelectStyles}
+                    useNativeAndroidPickerStyle={false}
                   />
                 </View>
                 <Text style={styles.scheduleText}>分鐘</Text>
+                
+                {/* 💡 排版優化：按鈕放進這排的末端，並套用靠右排版的 Container */}
                 <View style={styles.saveButtonContainer}>
-                  <TouchableOpacity style={styles.saveButton}>
+                  <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchedule}>
                     <Text style={styles.saveButtonText}>儲存設定</Text>
                   </TouchableOpacity>
                 </View>
@@ -211,22 +259,22 @@ export default function EnvironmentScreen() {
             </View>
           </View>
         </>
-      )}
-      right={(
-        <>
-          <Text style={styles.godPanelHeader}><FontAwesome name="sliders" size={18} color="#FFF" /> 控制面板</Text>
-          <Text style={styles.godPanelSub}>模擬硬體回傳數值</Text>
-          <View style={styles.godPanelControls}>
-            {renderSliderControl('溫度', temperature, setTemperature, -30, 60, '°C')}
-            {renderSliderControl('光照強度', light, setLight, 0, 150000, 'lux')}
-            {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%')}
-            {renderSliderControl('CO2 濃度', co2, setCo2, 300, 2000, 'ppm')}
-          </View>
-        </>
-      )}
-    />
-    
-      {/* 獨立在右上方浮動的通知面板 (從右側滑入) */}
+        )}
+        right={(
+          <>
+            <Text style={styles.godPanelHeader}><FontAwesome name="sliders" size={18} color="#FFF" /> 控制面板</Text>
+            <Text style={styles.godPanelSub}>模擬硬體回傳數值</Text>
+            <View style={styles.godPanelControls}>
+              {renderSliderControl('溫度', temperature, setTemperature, -30, 60, '°C')}
+              {renderSliderControl('光照強度', light, setLight, 0, 150000, 'lux')}
+              {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%')}
+              {renderSliderControl('CO2 濃度', co2, setCo2, 300, 2000, 'ppm')}
+            </View>
+          </>
+        )}
+      />
+      
+      {/* 獨立在右上方浮動的通知面板 */}
       {activeAlerts.length > 0 && (
         <Animated.View style={[styles.floatingNotificationPanel, { transform: [{ translateX: slideAnim }] }]}>
           <Text style={styles.notificationPanelHeader}><FontAwesome name="bell" size={14} color="#FFF" />  異常警示</Text>
@@ -238,10 +286,10 @@ export default function EnvironmentScreen() {
                   <Text style={styles.notificationAlertTitle}>{info.title}</Text>
                   <Text style={styles.notificationMessage} numberOfLines={3}>{info.message}</Text>
                   <View style={styles.notificationButtonsRow}>
-                    <TouchableOpacity style={[styles.notificationButton, styles.notificationPrimary, { flex: 1, marginRight: 6 }]} onPress={() => router.replace('/alerts')}>
+                    <TouchableOpacity style={[styles.notificationButton, styles.notificationPrimary, { flex: 1, marginRight: 6 }]} onPress={info.action}>
                       <Text style={{ color: '#FFF', fontWeight: 'bold', textAlign: 'center' }}>{info.actionLabel}</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.notificationButton, styles.notificationSecondary, { width: 56 }]} onPress={() => router.replace('/alerts')}>
+                    <TouchableOpacity style={[styles.notificationButton, styles.notificationSecondary, { width: 56 }]} onPress={info.action}>
                       <Text style={{ color: '#FFF', textAlign: 'center' }}>詳情</Text>
                     </TouchableOpacity>
                   </View>
@@ -261,327 +309,77 @@ export default function EnvironmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-  },
-  mainLayout: {
-    flexDirection: 'row',
-    width: '100%',
-    maxWidth: 1200,
-    padding: spacing.xxl,
-  },
-  leftColumn: {
-    flex: 3,
-    paddingRight: spacing.xl,
-  },
-  rightColumn: {
-    flex: 1,
-    backgroundColor: colors.control,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    maxHeight: 600,
-  },
-  // --- 頂部導覽列樣式 ---
-  topNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    marginBottom: spacing.xl,
-    paddingHorizontal: spacing.md,
-    width: '100%',
-  },
-  navLeftGroup: {
-    flexDirection: 'row',
-    gap: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navRightGroup: {
-    position: 'absolute',
-    right: 10,
-  },
-  navItem: {
-    paddingBottom: 8,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  navItemActive: {
-    borderBottomColor: colors.primary,
-  },
-  navText: {
-    color: colors.muted,
-    fontSize: 16,
-  },
-  navTextActive: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  // --- 警示框樣式 ---
-  warningWrapper: {
-    alignItems: 'flex-end',
-    marginBottom: spacing.lg,
-  },
-  warningToast: {
-    backgroundColor: colors.alert,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 18,
-    borderRadius: 20,
-  },
-  warningText: {
-    color: '#000',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  // --- 四宮格與數值樣式 ---
-  gridContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  card: {
-    width: '48%',
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    marginBottom: spacing.lg,
-    minHeight: 160,
-    justifyContent: 'space-between',
-  },
-  cardTitle: {
-    color: colors.text,
-    fontSize: typography.h2,
-    fontWeight: 'bold',
-  },
-  cardValueContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  cardValue: {
-    color: colors.text,
-    fontSize: typography.large,
-    fontWeight: 'bold',
-  },
-  cardUnit: {
-    fontSize: 16,
-    fontWeight: 'normal',
-    color: colors.subtle,
-  },
-  textAlert: {
-    color: colors.alert,
-  },
-  actionButton: {
-    backgroundColor: colors.secondary,
-    paddingVertical: 8,
-    borderRadius: radii.md,
-    alignItems: 'center',
-    width: '100%',
-  },
-  actionButtonText: {
-    color: colors.text,
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  horizontalDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.md,
-    width: '100%',
-  },
-  // --- 自動灌溉排程樣式 ---
-  scheduleCard: {
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-  },
-  scheduleTitle: {
-    color: colors.text,
-    fontSize: typography.h2,
-    fontWeight: 'bold',
-    marginBottom: spacing.lg,
-  },
-  scheduleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.md,
-  },
-  scheduleLabel: {
-    color: colors.subtle,
-    fontSize: 16,
-    width: 80,
-  },
-  scheduleText: {
-    color: colors.text,
-    fontSize: typography.body,
-    marginHorizontal: 8,
-  },
+  scrollContent: { flexGrow: 1, alignItems: 'center' },
+  mainLayout: { flexDirection: 'row', width: '100%', maxWidth: 1200, padding: spacing.xxl },
+  leftColumn: { flex: 3, paddingRight: spacing.xl },
+  rightColumn: { flex: 1, backgroundColor: colors.control, borderRadius: radii.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, maxHeight: 600 },
+  topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: spacing.xl, paddingHorizontal: spacing.md, width: '100%' },
+  navLeftGroup: { flexDirection: 'row', gap: 25, alignItems: 'center', justifyContent: 'center' },
+  navRightGroup: { position: 'absolute', right: 10 },
+  navItem: { paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  navItemActive: { borderBottomColor: colors.primary },
+  navText: { color: colors.muted, fontSize: 16 },
+  navTextActive: { color: colors.text, fontSize: 16, fontWeight: 'bold' },
+  warningWrapper: { alignItems: 'flex-end', marginBottom: spacing.lg },
+  warningToast: { backgroundColor: colors.alert, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20 },
+  warningText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
+  gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+  card: { width: '48%', backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.lg, minHeight: 160, justifyContent: 'space-between' },
+  cardTitle: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold' },
+  cardValueContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  cardValue: { color: colors.text, fontSize: typography.large, fontWeight: 'bold' },
+  cardUnit: { fontSize: 16, fontWeight: 'normal', color: colors.subtle },
+  textAlert: { color: colors.alert },
+  actionButton: { backgroundColor: colors.secondary, paddingVertical: 8, borderRadius: radii.md, alignItems: 'center', width: '100%' },
+  actionButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 13 },
+  horizontalDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md, width: '100%' },
+  scheduleCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.xl },
+  scheduleTitle: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold', marginBottom: spacing.lg },
+  
+  // 讓每一排的元素（標題、下拉選單、文字）維持水平置中對齊
+  scheduleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, width: '100%' },
+  scheduleLabel: { color: colors.subtle, fontSize: 16, width: 80 },
+  scheduleText: { color: colors.text, fontSize: typography.body, marginHorizontal: 8 },
+  
   pickerWrapper: {
-    backgroundColor: '#ffffff',
-    borderRadius: 6,
-    minWidth: 10,
-    height: 32,
-    justifyContent: 'center',
-  },
-  saveButtonContainer: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  saveButton: {
-    backgroundColor: colors.secondary,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: radii.md,
-  },
-  saveButtonText: {
-    color: colors.text,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  // --- 上帝面板樣式 ---
-  godPanelHeader: {
-    color: colors.text,
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  godPanelSub: {
-    color: colors.subMuted,
-    fontSize: typography.small,
-    marginBottom: 30,
-  },
-  godPanelControls: {
-    flexDirection: 'column',
-  },
-  controlRow: {
-    marginBottom: 25,
-  },
-  controlLabelGroup: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  controlLabel: {
-    color: colors.text,
-    fontSize: 14,
-  },
-  controlValueText: {
-    color: colors.text,
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  slider: {
-    width: '100%',
-    height: 40,
-  },
-  notificationContainer: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 18,
-  },
-  notificationBox: {
-    width: '100%',
-    backgroundColor: colors.notificationBg,
-    borderRadius: 12,
-    padding: 12,
+    backgroundColor: '#FFFFFF',    // 純白色背景
+    borderRadius: 8,              // 圓角
     borderWidth: 1,
-    borderColor: colors.border,
-  },
-  notificationTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  notificationAlertTitle: {
-    color: colors.alert,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  notificationMessage: {
-    color: '#DDD',
-    fontSize: 13,
-    marginTop: 6,
-  },
-  notificationButtons: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-  },
-  notificationButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: radii.md,
-  },
-  notificationPrimary: {
-    backgroundColor: colors.primary,
-  },
-  notificationSecondary: {
-    backgroundColor: colors.secondary,
-  },
-  centerColumn: {
-    width: 260,
+    borderColor: '#E2E8F0',       // 極淡的灰框作為邊界
+    minWidth: 80,                 // 防止文字擠壓
+    height: 36,                   // 稍微拉高讓文字更好垂直居中
     justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 8,
+    overflow: 'hidden',           // 切除內部元件多餘黑線的關鍵
   },
-  notificationVerticalBox: {
-    width: '100%',
-    alignItems: 'center',
-    paddingVertical: 6,
-  },
-  notificationItem: {
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  notificationButtonsVertical: {
-    flexDirection: 'column',
-    gap: 8,
-    marginTop: 8,
-  },
-  floatingNotificationPanel: {
-    position: 'absolute',
-    top: 84, // TopNav 高度 (60) + PageShell 內距 (24)
-    right: spacing.xl,
-    width: 340,
-    backgroundColor: colors.control,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-    zIndex: 1000,
-    maxHeight: '80%',
-  },
-  notificationPanelHeader: {
-    color: colors.text,
-    fontSize: typography.h2,
-    fontWeight: 'bold',
-    marginBottom: spacing.md,
-  },
-  notificationCard: {
-    width: '100%',
-    backgroundColor: colors.card,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-    alignItems: 'flex-start',
-    minHeight: 80,
-    justifyContent: 'space-between',
-  },
-  notificationButtonsRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
+  
+  // 💡 排版核心：利用 flex: 1 填滿該行剩餘空間，再用 alignItems: 'flex-end' 把按鈕完美推到最右邊
+  saveButtonContainer: { flex: 1, alignItems: 'flex-end', marginLeft: 12 },
+  saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md },
+  saveButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
+  
+  godPanelHeader: { color: colors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
+  godPanelSub: { color: colors.subMuted, fontSize: typography.small, marginBottom: 30 },
+  godPanelControls: { flexDirection: 'column' },
+  controlRow: { marginBottom: 25 },
+  controlLabelGroup: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  controlLabel: { color: colors.text, fontSize: 14 },
+  controlValueText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
+  slider: { width: '100%', height: 40 },
+  notificationContainer: { width: '100%', alignItems: 'center', marginBottom: 18 },
+  notificationBox: { width: '100%', backgroundColor: colors.notificationBg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border },
+  notificationTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  notificationAlertTitle: { color: colors.alert, fontWeight: '700', fontSize: 14 },
+  notificationMessage: { color: '#DDD', fontSize: 13, marginTop: 6 },
+  notificationButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  notificationButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: radii.md },
+  notificationPrimary: { backgroundColor: colors.primary },
+  notificationSecondary: { backgroundColor: colors.secondary },
+  centerColumn: { width: 260, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
+  notificationVerticalBox: { width: '100%', alignItems: 'center', paddingVertical: 6 },
+  notificationItem: { marginBottom: 12, alignItems: 'center' },
+  notificationButtonsVertical: { flexDirection: 'column', gap: 8, marginTop: 8 },
+  floatingNotificationPanel: { position: 'absolute', top: 84, right: spacing.xl, width: 340, backgroundColor: colors.control, borderRadius: radii.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8, zIndex: 1000, maxHeight: '80%' },
+  notificationPanelHeader: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold', marginBottom: spacing.md },
+  notificationCard: { width: '100%', backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.md, marginBottom: spacing.md, alignItems: 'flex-start', minHeight: 80, justifyContent: 'space-between' },
+  notificationButtonsRow: { flexDirection: 'row', marginTop: 10, width: '100%', alignItems: 'center' },
 });

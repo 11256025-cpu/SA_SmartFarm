@@ -15,9 +15,33 @@ const db = new sqlite3.Database('./farm.db', sqlite3.OPEN_READWRITE, (err) => {
         console.error("資料庫連線失敗:", err.message);
     } else {
         console.log("成功連線到 SQLite 資料庫 (farm.db)！");
-        // 自動嘗試新增 avatar 欄位，若已存在則忽略錯誤
-        db.run(`ALTER TABLE USER ADD COLUMN avatar TEXT`, (err) => {
-            if (!err) console.log("✅ 已成功為 USER 表新增 avatar 欄位！");
+        
+        db.serialize(() => {
+            // 自動嘗試新增 avatar 欄位，若已存在則忽略錯誤
+            db.run(`ALTER TABLE USER ADD COLUMN avatar TEXT`, (err) => {
+                if (!err) console.log("✅ 已成功為 USER 表新增 avatar 欄位！");
+            });
+
+            // 💡 新增：自動建立灌溉排程設定表 (如果不存在的話)
+            db.run(`
+                CREATE TABLE IF NOT EXISTS schedule_settings (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    frequency INTEGER NOT NULL,
+                    duration INTEGER NOT NULL,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            `, (err) => {
+                if (!err) {
+                    // 💡 防呆：如果表裡面完全沒資料，就自動塞入一筆預設資料 (id=1)，方便後續直接更新
+                    db.get("SELECT COUNT(*) as count FROM schedule_settings", (err, row) => {
+                        if (row && row.count === 0) {
+                            db.run("INSERT INTO schedule_settings (id, frequency, duration) VALUES (1, 2, 10)", () => {
+                                console.log("✅ 已初始化預設排程設定 (每隔 2 分鐘，單次時長 10 分鐘)！");
+                            });
+                        }
+                    });
+                }
+            });
         });
     }
 });
@@ -172,8 +196,30 @@ app.get('/api/alerts/settings', (req, res) => {
     });
 });
 
+// 💡 新增：儲存環境頁面的「自動灌溉排程設定」API
+app.post('/api/schedule', (req, res) => {
+    const { frequency, duration } = req.body;
+
+    console.log(`📡 收到儲存自動灌溉排程請求 - 頻率: 每隔 ${frequency} 分鐘, 時長: ${duration} 分鐘`);
+
+    // 檢查欄位是否存在
+    if (frequency === undefined || duration === undefined) {
+        return res.status(400).json({ success: false, message: "缺少必要的設定數值(frequency/duration)" });
+    }
+
+    // 更新固定 id = 1 的那一筆設定紀錄
+    const sql = `UPDATE schedule_settings SET frequency = ?, duration = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1`;
+    db.run(sql, [frequency, duration], function(err) {
+        if (err) {
+            console.error("❌ 更新排程設定失敗:", err.message);
+            return res.status(500).json({ success: false, message: "資料庫寫入失敗" });
+        }
+        res.json({ success: true, message: "排程設定更新成功！" });
+    });
+});
+
 // ==========================================
-//        新增：個人資料頁面所需的 API
+//        個人資料頁面所需的 API
 // ==========================================
 
 // 5. 取得特定使用者資料 (GET)
