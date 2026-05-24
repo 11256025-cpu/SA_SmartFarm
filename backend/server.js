@@ -7,7 +7,7 @@ const port = 3000;
 
 // --- 設定中介軟體 ---
 app.use(cors()); // 允許跨網域請求 (讓前端 APP 可以連過來)
-app.use(express.json()); // 讓伺服器能看得懂前端傳來的 JSON 資料
+app.use(express.json({ limit: '10mb' })); // 💡 加大接收資料的限制，以便順利接收 Base64 圖片編碼
 
 // --- 連線到我們剛剛建立的 SQLite 資料庫 ---
 const db = new sqlite3.Database('./farm.db', sqlite3.OPEN_READWRITE, (err) => {
@@ -15,6 +15,10 @@ const db = new sqlite3.Database('./farm.db', sqlite3.OPEN_READWRITE, (err) => {
         console.error("資料庫連線失敗:", err.message);
     } else {
         console.log("成功連線到 SQLite 資料庫 (farm.db)！");
+        // 自動嘗試新增 avatar 欄位，若已存在則忽略錯誤
+        db.run(`ALTER TABLE USER ADD COLUMN avatar TEXT`, (err) => {
+            if (!err) console.log("✅ 已成功為 USER 表新增 avatar 欄位！");
+        });
     }
 });
 
@@ -48,8 +52,8 @@ app.post('/api/register', (req, res) => {
             }
             return res.status(500).json({ success: false, message: "伺服器發生未知的錯誤" });
         }
-        // 註冊成功，回傳自動產生的 使用者編號 (this.lastID)
-        res.json({ success: true, message: "註冊成功！", userId: this.lastID });
+        // 註冊成功，回傳如同登入時的使用者資訊，方便前端直接存入快取並自動登入
+        res.json({ success: true, message: "註冊成功！", user: { id: this.lastID, nickname: nickname, account: username } });
     });
 });
 
@@ -57,7 +61,8 @@ app.post('/api/register', (req, res) => {
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
 
-    const sql = `SELECT * FROM USER WHERE account = ? AND password = ?`;
+    // 💡 加上 rowid as id，這樣前端才能精準拿到使用者的 ID
+    const sql = `SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ? AND password = ?`;
     db.get(sql, [username, password], (err, row) => {
         if (err) {
             return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
@@ -159,6 +164,47 @@ app.get('/api/alerts/settings', (req, res) => {
             console.error('❌ 解析設定時發生錯誤:', e.message);
             return res.status(500).json({ success: false, message: '解析設定失敗' });
         }
+    });
+});
+
+// ==========================================
+//        新增：個人資料頁面所需的 API
+// ==========================================
+
+// 5. 取得特定使用者資料 (GET)
+app.get('/api/users/:id', (req, res) => {
+    const userId = req.params.id;
+    
+    // 利用 SQLite 內建的 rowid 來精準搜尋該帳號
+    const sql = `SELECT rowid as id, nickname, account, avatar FROM USER WHERE rowid = ?`;
+    db.get(sql, [userId], (err, row) => {
+        if (err) return res.status(500).json({ success: false, message: '資料庫錯誤' });
+        if (row) return res.json({ success: true, user: row });
+        res.status(404).json({ success: false, message: "找不到使用者" });
+    });
+});
+
+// 6. 更新使用者暱稱 (PUT)
+app.put('/api/users/:id', (req, res) => {
+    const userId = req.params.id;
+    const { nickname } = req.body;
+    
+    const sql = `UPDATE USER SET nickname = ? WHERE rowid = ?`;
+    db.run(sql, [nickname, userId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: '資料庫錯誤' });
+        res.json({ success: true, message: "暱稱更新成功" });
+    });
+});
+
+// 7. 更新大頭貼 (PUT)
+app.put('/api/users/:id/avatar', (req, res) => {
+    const userId = req.params.id;
+    const { avatar } = req.body;
+    
+    const sql = `UPDATE USER SET avatar = ? WHERE rowid = ?`;
+    db.run(sql, [avatar, userId], function(err) {
+        if (err) return res.status(500).json({ success: false, message: '資料庫錯誤' });
+        res.json({ success: true, message: "大頭貼更新成功" });
     });
 });
 

@@ -1,4 +1,5 @@
 // app/(auth)/register.tsx
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -35,8 +36,18 @@ export default function RegisterScreen() {
       const data = await response.json();
 
       if (data.success) {
-        alert('✅ 註冊成功！請重新登入。');
-        router.replace('/(auth)/login');
+        // 取得後端回傳的新使用者資料
+        const userId = data.user?.id;
+        
+        if (userId) {
+          // 同步存入 AsyncStorage，讓個人資料頁面能「秒開」
+          await AsyncStorage.setItem('userId', String(userId));
+          await AsyncStorage.setItem('userName', nickname);
+          await AsyncStorage.setItem('loginAccount', account);
+        }
+
+        alert('✅ 註冊成功！已為您自動登入。');
+        router.replace('/environment');
       } else {
         alert('❌ 註冊失敗：' + data.message);
       }

@@ -40,6 +40,9 @@ export default function LoginScreen() {
         if (userId) {
           try {
             await AsyncStorage.setItem('userId', String(userId));
+            if (data.user?.nickname) await AsyncStorage.setItem('userName', data.user.nickname);
+            if (data.user?.account) await AsyncStorage.setItem('loginAccount', data.user.account);
+            if (data.user?.avatar) await AsyncStorage.setItem('avatarUri', data.user.avatar);
           } catch (e) {
             console.warn('無法儲存 userId 到 AsyncStorage', e);
           }

@@ -37,11 +37,15 @@ export default function CropsScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [4, 3],
-      quality: 0.8,
+      quality: 0.3, // 降低畫質避免 base64 字串過大
+      base64: true, // 💡 關鍵：要求直接將圖片轉成 Base64 編碼的文字格式
     });
 
     if (!result.canceled) {
-      setUploadedImageUri(result.assets[0].uri);
+      const asset = result.assets[0];
+      // 組合完整的 Base64 字串，這樣實體檔案遺失也不會破圖
+      const imagePayload = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
+      setUploadedImageUri(imagePayload);
     }
   };
 
