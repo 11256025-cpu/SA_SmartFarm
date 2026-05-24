@@ -33,12 +33,17 @@ app.get('/', (req, res) => {
 
 // 2. 註冊 API (接收前端資料寫入 USER 表)
 app.post('/api/register', (req, res) => {
-    // 從前端傳來的資料中抓取 暱稱、帳號、密碼
-    const { nickname, username, password } = req.body;
+    // 💡 加上 confirmPassword 接收前端傳過來的確認密碼
+    const { nickname, username, password, confirmPassword } = req.body;
 
     // 檢查有沒有漏填
-    if (!nickname || !username || !password) {
+    if (!nickname || !username || !password || !confirmPassword) {
         return res.status(400).json({ success: false, message: "請填寫所有欄位" });
+    }
+
+    // 💡 後端二次防線：檢查兩次密碼是否一致
+    if (password !== confirmPassword) {
+        return res.status(400).json({ success: false, message: "兩次輸入的密碼不一致" });
     }
 
     // 寫入資料庫的 SQL 語法 (? 是為了防止隱碼攻擊)
