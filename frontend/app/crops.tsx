@@ -9,11 +9,7 @@ import { colors, radii, spacing, typography } from '../components/sharedStyles';
 export default function CropsScreen() {
   // === 狀態管理 ===
   const [crops, setCrops] = useState([
-    { id: 1, name: '番茄A', stage: '成熟期', status: '良好', image: null },
-    { id: 2, name: '番茄B', stage: '成熟期', status: '良好', image: null },
-    { id: 3, name: '番茄C', stage: '成熟期', status: '良好', image: null },
-    { id: 4, name: '番茄A', stage: '成熟期', status: '良好', image: null },
-    { id: 5, name: '番茄B', stage: '成熟期', status: '良好', image: null },
+    
   ]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
