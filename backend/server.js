@@ -57,6 +57,37 @@ const db = new sqlite3.Database('./farm.db', (err) => {
             `, (err) => {
                 if (!err) console.log("✅ 已初始化作物 (crops) 資料表！");
             });
+
+        // 💡 新增：自動建立 HISTORY 表格並塞入假資料測試
+        db.run(`
+            CREATE TABLE IF NOT EXISTS HISTORY (
+                record_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                record_time DATETIME DEFAULT CURRENT_TIMESTAMP,
+                history_temp REAL,
+                history_soil_moisture REAL,
+                history_light REAL,
+                history_co2 REAL,
+                FOREIGN KEY (user_id) REFERENCES USER(user_id)
+            )
+        `, (err) => {
+            if (!err) {
+                db.get("SELECT COUNT(*) as count FROM HISTORY", (err, row) => {
+                    if (row && row.count === 0) {
+                        // 插入幾筆假資料給 user_id = 1，模擬隨時間變化的數據
+                        const insert = db.prepare("INSERT INTO HISTORY (user_id, history_temp, history_soil_moisture, history_light, history_co2, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime', ?))");
+                        insert.run(1, 25.5, 45, 12000, 400, '-5 hours');
+                        insert.run(1, 26.2, 42, 15000, 410, '-4 hours');
+                        insert.run(1, 27.8, 40, 18000, 420, '-3 hours');
+                        insert.run(1, 29.1, 35, 20000, 430, '-2 hours');
+                        insert.run(1, 28.5, 30, 16000, 415, '-1 hours'); 
+                        insert.run(1, 27.0, 55, 13000, 405, '0 hours');
+                        insert.finalize();
+                        console.log("✅ 已初始化歷史紀錄 (HISTORY) 預設假資料！");
+                    }
+                });
+            }
+        });
         });
     }
 });
@@ -271,6 +302,46 @@ app.put('/api/users/:id/avatar', (req, res) => {
     db.run(sql, [avatar, userId], function(err) {
         if (err) return res.status(500).json({ success: false, message: '資料庫錯誤' });
         res.json({ success: true, message: "大頭貼更新成功" });
+    });
+});
+
+// ==========================================
+// 8. 取得歷史紀錄 API (GET)
+// ==========================================
+app.get('/api/history', (req, res) => {
+    const userId = req.query.userId;
+    const limit = req.query.limit || 30; // 💡 放大預設筆數，讓圖表能顯示更多趨勢
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate;
+    
+    if (!userId) {
+        return res.status(400).json({ success: false, message: "缺少 userId" });
+    }
+
+    let sql = `SELECT * FROM HISTORY WHERE user_id = ?`;
+    const params = [userId];
+
+    // 💡 如果有傳入開始日期，就過濾大於該日期的 00:00:00
+    if (startDate) {
+        sql += ` AND record_time >= ?`;
+        params.push(`${startDate} 00:00:00`);
+    }
+    
+    // 💡 如果有傳入結束日期，就過濾小於該日期的 23:59:59
+    if (endDate) {
+        sql += ` AND record_time <= ?`;
+        params.push(`${endDate} 23:59:59`);
+    }
+
+    // 依據時間降冪排序撈出最新資料
+    sql += ` ORDER BY record_time DESC LIMIT ?`;
+    params.push(limit);
+
+    db.all(sql, params, (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: '資料庫錯誤' });
+        
+        // 將結果反轉，讓最舊的時間在左邊，最新的在右邊，符合圖表閱讀直覺
+        res.json({ success: true, data: rows.reverse() });
     });
 });
 
