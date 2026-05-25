@@ -1,10 +1,14 @@
 import { FontAwesome } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
-import { Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
+
+// 💡 自動判斷執行環境，避免 localhost 在實機上連不到
+const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 export default function CropsScreen() {
   // === 狀態管理 ===
@@ -19,6 +23,24 @@ export default function CropsScreen() {
   const [cropStage, setCropStage] = useState('');
   const [cropStatus, setCropStatus] = useState('');
   const [uploadedImageUri, setUploadedImageUri] = useState<string | null>(null);
+  const [editingCropId, setEditingCropId] = useState<number | null>(null); // 💡 新增：紀錄正在編輯的作物 ID
+
+  // 💡 初始化：從後端載入作物的資料
+  useEffect(() => {
+    const loadCrops = async () => {
+      try {
+        let uid = await AsyncStorage.getItem('userId') || '1';
+        const response = await fetch(`${BASE_URL}/api/crops?userId=${uid}`);
+        const data = await response.json();
+        if (data.success && data.crops) {
+          setCrops(data.crops);
+        }
+      } catch (error) {
+        console.warn('載入作物失敗:', error);
+      }
+    };
+    loadCrops();
+  }, []);
 
   // 核心功能：開啟手機相簿選取植物照片
   const handlePickImage = async () => {
@@ -45,29 +67,107 @@ export default function CropsScreen() {
     }
   };
 
+  // 💡 重置表單
+  const resetForm = () => {
+    setEditingCropId(null);
+    setCropName('');
+    setCropStage('');
+    setCropStatus('');
+    setUploadedImageUri(null);
+  };
+
+  const handleOpenAddModal = () => {
+    resetForm();
+    setIsModalVisible(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalVisible(false);
+    resetForm();
+  };
+
+  // 💡 開啟編輯模式：將卡片資料帶入表單中
+  const handleEditCrop = (crop: any) => {
+    setEditingCropId(crop.id);
+    setCropName(crop.name);
+    setCropStage(crop.stage);
+    setCropStatus(crop.status);
+    setUploadedImageUri(crop.image);
+    setIsModalVisible(true);
+  };
+
   // 儲存表單
-  const handleSaveCrop = () => {
+  const handleSaveCrop = async () => {
     if (!cropName.trim()) {
       alert('請輸入作物名稱！');
       return;
     }
 
-    const newCropRecord = {
-      id: crops.length + 1,
-      name: cropName,
-      stage: cropStage || '幼苗期',
-      status: cropStatus || '良好',
-      image: uploadedImageUri,
-    };
+    try {
+      let uid = await AsyncStorage.getItem('userId') || '1';
+      
+      const payload = {
+        userId: Number(uid),
+        name: cropName,
+        stage: cropStage || '幼苗期',
+        status: cropStatus || '良好',
+        image: uploadedImageUri,
+      };
 
-    setCrops([...crops, newCropRecord]);
+      const isEditing = editingCropId !== null;
+      const url = isEditing ? `${BASE_URL}/api/crops/${editingCropId}` : `${BASE_URL}/api/crops`;
+      const method = isEditing ? 'PUT' : 'POST';
 
-    // 重置表單狀態並關閉彈窗
-    setCropName('');
-    setCropStage('');
-    setCropStatus('');
-    setUploadedImageUri(null);
-    setIsModalVisible(false);
+      // 發送 API 請求到後端
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        alert(isEditing ? '✅ 作物已成功更新！' : '✅ 作物已成功新增！');
+        
+        if (isEditing) {
+          setCrops(crops.map(c => c.id === editingCropId ? { ...c, ...payload } : c));
+        } else {
+          const newCropRecord = data.crop || { ...payload, id: data.insertId || crops.length + 1 };
+          setCrops([...crops, newCropRecord]);
+        }
+
+        handleCloseModal();
+      } else {
+        alert(`❌ 儲存失敗：${data.message || '請稍後再試'}`);
+      }
+    } catch (error) {
+      console.error('儲存作物時發生錯誤:', error);
+      alert('⚠️ 無法連線到伺服器，請確認後端服務已啟動。');
+    }
+  };
+
+  // 💡 刪除作物
+  const handleDeleteCrop = async () => {
+    if (!editingCropId) return;
+    
+    try {
+      const response = await fetch(`${BASE_URL}/api/crops/${editingCropId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        alert('🗑️ 作物已成功刪除！');
+        setCrops(crops.filter(c => c.id !== editingCropId));
+        handleCloseModal();
+      } else {
+        alert(`❌ 刪除失敗：${data.message || '請稍後再試'}`);
+      }
+    } catch (error) {
+      console.error('刪除作物時發生錯誤:', error);
+      alert('⚠️ 無法連線到伺服器。');
+    }
   };
 
   return (
@@ -78,7 +178,7 @@ export default function CropsScreen() {
           <Text style={styles.pageTitle}>作物管理</Text>
           <Text style={styles.pageSubtitle}>目前共記錄了 {crops.length} 項作物</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={() => setIsModalVisible(true)}>
+        <TouchableOpacity style={styles.addBtn} onPress={handleOpenAddModal}>
           <FontAwesome name="plus" size={16} color={colors.text} style={{ marginRight: 8 }} />
           <Text style={styles.addBtnText}>新增作物</Text>
         </TouchableOpacity>
@@ -87,7 +187,8 @@ export default function CropsScreen() {
       {/* 作物卡片網格 */}
       <ScrollView contentContainerStyle={styles.cardGridContainer} showsVerticalScrollIndicator={false}>
         {crops.map((item) => (
-          <View key={item.id} style={styles.cropCard}>
+          <TouchableOpacity key={item.id} style={styles.cropCard} activeOpacity={0.8} onPress={() => handleEditCrop(item)}>
+            {/* 💡 將 View 改為 TouchableOpacity，並綁定點擊事件 */}
             <View style={styles.cardImageLayer}>
               {item.image ? (
                 <Image source={{ uri: item.image }} style={styles.cardRealRenderImage} />
@@ -107,11 +208,11 @@ export default function CropsScreen() {
             <View style={styles.heartPulseBadge}>
               <FontAwesome name="heartbeat" size={11} color={colors.text} />
             </View>
-          </View>
+          </TouchableOpacity>
         ))}
 
         {/* 虛線新增按鈕卡片 (保留作為第二個新增入口) */}
-        <TouchableOpacity style={styles.dashedActionCard} onPress={() => setIsModalVisible(true)}>
+        <TouchableOpacity style={styles.dashedActionCard} onPress={handleOpenAddModal}>
           <FontAwesome name="plus" size={24} color={colors.muted} style={{ marginBottom: 8 }} />
           <Text style={styles.dashedActionText}>新增作物</Text>
         </TouchableOpacity>
@@ -123,8 +224,8 @@ export default function CropsScreen() {
           <View style={styles.modalCard}>
             {/* 彈窗標題 */}
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>新增作物</Text>
-              <TouchableOpacity onPress={() => setIsModalVisible(false)} style={styles.closeBtn}>
+              <Text style={styles.modalTitle}>{editingCropId ? '編輯作物' : '新增作物'}</Text>
+              <TouchableOpacity onPress={handleCloseModal} style={styles.closeBtn}>
                 <FontAwesome name="times" size={20} color={colors.muted} />
               </TouchableOpacity>
             </View>
@@ -199,11 +300,18 @@ export default function CropsScreen() {
 
             {/* 彈窗按鈕區 */}
             <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsModalVisible(false)}>
+              {/* 💡 編輯模式時，顯示刪除按鈕 */}
+              {editingCropId && (
+                <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteCrop}>
+                  <Text style={styles.deleteBtnText}>刪除</Text>
+                </TouchableOpacity>
+              )}
+              <View style={{ flex: 1 }} />
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCloseModal}>
                 <Text style={styles.cancelBtnText}>取消</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleSaveCrop}>
-                <Text style={styles.saveBtnText}>確認新增</Text>
+                <Text style={styles.saveBtnText}>{editingCropId ? '儲存修改' : '確認新增'}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -248,6 +356,8 @@ const styles = StyleSheet.create({
   cancelBtnText: { color: colors.text, fontSize: typography.body, fontWeight: 'bold' },
   saveBtn: { paddingVertical: 10, paddingHorizontal: 24, borderRadius: radii.md, backgroundColor: colors.primary },
   saveBtnText: { color: colors.text, fontSize: typography.body, fontWeight: 'bold' },
+  deleteBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md, backgroundColor: 'rgba(240, 110, 110, 0.1)' },
+  deleteBtnText: { color: colors.alert, fontSize: typography.body, fontWeight: 'bold' },
 
   // 作物列表卡片樣式
   cardGridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingHorizontal: spacing.xl, paddingBottom: 60 },

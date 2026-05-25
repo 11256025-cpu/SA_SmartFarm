@@ -10,7 +10,8 @@ app.use(cors()); // 允許跨網域請求 (讓前端 APP 可以連過來)
 app.use(express.json({ limit: '10mb' })); // 💡 加大接收資料的限制，以便順利接收 Base64 圖片編碼
 
 // --- 連線到我們剛剛建立的 SQLite 資料庫 ---
-const db = new sqlite3.Database('./farm.db', sqlite3.OPEN_READWRITE, (err) => {
+// 💡 修正：移除 sqlite3.OPEN_READWRITE，讓資料庫在遺失時會自動建立新的
+const db = new sqlite3.Database('./farm.db', (err) => {
     if (err) {
         console.error("資料庫連線失敗:", err.message);
     } else {
@@ -41,6 +42,20 @@ const db = new sqlite3.Database('./farm.db', sqlite3.OPEN_READWRITE, (err) => {
                         }
                     });
                 }
+            });
+
+            // 💡 新增：自動建立作物資料表
+            db.run(`
+                CREATE TABLE IF NOT EXISTS crops (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    userId INTEGER NOT NULL,
+                    name TEXT NOT NULL,
+                    stage TEXT,
+                    status TEXT,
+                    image TEXT
+                )
+            `, (err) => {
+                if (!err) console.log("✅ 已初始化作物 (crops) 資料表！");
             });
         });
     }
@@ -258,6 +273,11 @@ app.put('/api/users/:id/avatar', (req, res) => {
         res.json({ success: true, message: "大頭貼更新成功" });
     });
 });
+
+// ==========================================
+//               註冊獨立的 API 路由
+// ==========================================
+app.use('/api/crops', require('./routes/crops'));
 
 // ==========================================
 //               --- 啟動伺服器 ---

@@ -15,18 +15,8 @@ db.serialize(() => {
         user_id INTEGER PRIMARY KEY AUTOINCREMENT,
         nickname TEXT NOT NULL,
         account TEXT UNIQUE NOT NULL,
-        password TEXT NOT NULL
-    )`);
-
-    // 2. 建立 CROP 表格 (作物資訊)
-    db.run(`CREATE TABLE IF NOT EXISTS CROP (
-        crop_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        crop_name TEXT NOT NULL,
-        suitable_month TEXT,
-        suitable_soil_moisture REAL,
-        growth_cycle TEXT,
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+        password TEXT NOT NULL,
+        avatar TEXT
     )`);
 
     // 3. 建立 IRRIGATION 表格 (灌溉設定)
@@ -58,6 +48,24 @@ db.serialize(() => {
         history_light REAL,
         history_co2 REAL,
         FOREIGN KEY (user_id) REFERENCES USER(user_id)
+    )`);
+
+    // 6. 建立 schedule_settings 表格 (自動灌溉排程設定)
+    db.run(`CREATE TABLE IF NOT EXISTS schedule_settings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        frequency INTEGER NOT NULL,
+        duration INTEGER NOT NULL,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )`);
+
+    // 7. 建立 crops 表格 (作物資料)
+    db.run(`CREATE TABLE IF NOT EXISTS crops (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        userId INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        stage TEXT,
+        status TEXT,
+        image TEXT
     )`, () => {
         console.log("✅ 所有資料表建立完成！");
         db.close();
