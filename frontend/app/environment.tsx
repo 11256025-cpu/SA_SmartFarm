@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
 import { router } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View, Alert } from 'react-native';
+import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -135,21 +135,24 @@ export default function EnvironmentScreen() {
   const pickerSelectStyles = StyleSheet.create({
     inputIOS: {
       color: '#000000',          // 黑色文字
-      paddingHorizontal: 12,
+      paddingLeft: 12,
+      paddingRight: 30,          // 預留空間給右側箭頭
       fontSize: typography.body,
       height: 36,
       backgroundColor: 'transparent',
     },
     inputAndroid: {
       color: '#000000',          // 黑色文字
-      paddingHorizontal: 12,
+      paddingLeft: 12,
+      paddingRight: 30,          // 預留空間給右側箭頭
       fontSize: typography.body,
       height: 36,
       backgroundColor: 'transparent',
     },
     inputWeb: {
       color: '#000000',          // 黑色文字
-      paddingHorizontal: 12,
+      paddingLeft: 12,
+      paddingRight: 30,          // 預留空間給右側箭頭
       fontSize: typography.body,
       height: 36,
       backgroundColor: 'transparent',
@@ -162,6 +165,10 @@ export default function EnvironmentScreen() {
     },
     placeholder: {
       color: '#999999',
+    },
+    iconContainer: {
+      top: 12,
+      right: 10,
     },
   });
 
@@ -177,6 +184,8 @@ export default function EnvironmentScreen() {
           }
         }}
         hasUnreadAlerts={activeAlerts.length > 0}
+      leftFlex={6}
+      rightFlex={4}
         left={(
           <>
           <View style={styles.leftColumn}>
@@ -229,12 +238,13 @@ export default function EnvironmentScreen() {
                     items={[{ label: '1', value: 1 },{ label: '2', value: 2 },{ label: '4', value: 4 },{ label: '8', value: 8 },{ label: '12', value: 12 },{ label: '24', value: 24 }]}
                     style={pickerSelectStyles}
                     useNativeAndroidPickerStyle={false}
+                    Icon={() => <FontAwesome name="chevron-down" size={12} color="#64748B" />}
                   />
                 </View>
                 <Text style={styles.scheduleText}>分鐘灌溉一次</Text>
               </View>
 
-              {/* 第二排：單次時長 ＋ 儲存設定（維持在同一排，並透過 flex 彈性推至最右邊） */}
+          {/* 第二排：單次時長 */}
               <View style={styles.scheduleRow}>
                 <Text style={styles.scheduleLabel}>單次時長</Text>
                 <Text style={styles.scheduleText}>一次灌溉</Text>
@@ -245,23 +255,24 @@ export default function EnvironmentScreen() {
                     items={[{ label: '1', value: 1 },{ label: '5', value: 5 },{ label: '10', value: 10 },{ label: '20', value: 20 },{ label: '30', value: 30 },{ label: '60', value: 60 }]}
                     style={pickerSelectStyles}
                     useNativeAndroidPickerStyle={false}
+                    Icon={() => <FontAwesome name="chevron-down" size={12} color="#64748B" />}
                   />
                 </View>
                 <Text style={styles.scheduleText}>分鐘</Text>
-                
-                {/* 💡 排版優化：按鈕放進這排的末端，並套用靠右排版的 Container */}
-                <View style={styles.saveButtonContainer}>
-                  <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchedule}>
-                    <Text style={styles.saveButtonText}>儲存設定</Text>
-                  </TouchableOpacity>
-                </View>
+              </View>
+
+              {/* 獨立儲存按鈕：放至排程卡片右下角 */}
+              <View style={styles.scheduleFooter}>
+                <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchedule}>
+                  <Text style={styles.saveButtonText}>儲存設定</Text>
+                </TouchableOpacity>
               </View>
             </View>
           </View>
         </>
         )}
         right={(
-          <>
+        <View style={styles.rightColumn}>
             <Text style={styles.godPanelHeader}><FontAwesome name="sliders" size={18} color="#FFF" /> 控制面板</Text>
             <Text style={styles.godPanelSub}>模擬硬體回傳數值</Text>
             <View style={styles.godPanelControls}>
@@ -270,7 +281,7 @@ export default function EnvironmentScreen() {
               {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%')}
               {renderSliderControl('CO2 濃度', co2, setCo2, 300, 2000, 'ppm')}
             </View>
-          </>
+        </View>
         )}
       />
       
@@ -311,7 +322,7 @@ export default function EnvironmentScreen() {
 const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, alignItems: 'center' },
   mainLayout: { flexDirection: 'row', width: '100%', maxWidth: 1200, padding: spacing.xxl },
-  leftColumn: { flex: 3, paddingRight: spacing.xl },
+  leftColumn: { flex: 1 },
   rightColumn: { flex: 1, backgroundColor: colors.control, borderRadius: radii.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, maxHeight: 600 },
   topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: spacing.xl, paddingHorizontal: spacing.md, width: '100%' },
   navLeftGroup: { flexDirection: 'row', gap: 25, alignItems: 'center', justifyContent: 'center' },
@@ -345,15 +356,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',    // 純白色背景
     borderRadius: 8,              // 圓角
     borderWidth: 1,
-    borderColor: '#E2E8F0',       // 極淡的灰框作為邊界
+    borderColor: '#64748B',       // 加深外框顏色讓選單更明顯
     minWidth: 80,                 // 防止文字擠壓
     height: 36,                   // 稍微拉高讓文字更好垂直居中
     justifyContent: 'center',
     overflow: 'hidden',           // 切除內部元件多餘黑線的關鍵
   },
   
-  // 💡 排版核心：利用 flex: 1 填滿該行剩餘空間，再用 alignItems: 'flex-end' 把按鈕完美推到最右邊
-  saveButtonContainer: { flex: 1, alignItems: 'flex-end', marginLeft: 12 },
+  // 💡 排版核心：將按鈕獨立為一排並靠右對齊
+  scheduleFooter: { marginTop: 10, alignItems: 'flex-end', width: '100%' },
   saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md },
   saveButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
   

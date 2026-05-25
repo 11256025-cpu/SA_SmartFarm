@@ -12,17 +12,19 @@ type Props = {
   showNav?: boolean;
   onBellPress?: () => void;
   hasUnreadAlerts?: boolean;
+  leftFlex?: number;
+  rightFlex?: number;
 };
 
-export default function PageShell({ left, center, right, children, active, showNav, onBellPress, hasUnreadAlerts }: Props) {
+export default function PageShell({ left, center, right, children, active, showNav, onBellPress, hasUnreadAlerts, leftFlex, rightFlex }: Props) {
   return (
     <SafeAreaView style={styles.container}>
       {showNav !== false ? <TopNav active={active || ''} onBellPress={onBellPress} hasUnreadAlerts={hasUnreadAlerts} /> : null}
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.mainLayout}>
-          {left ? <View style={styles.leftPanel}>{left}</View> : null}
+          {left ? <View style={[styles.leftPanel, leftFlex !== undefined && { flex: leftFlex }]}>{left}</View> : null}
           {center ? <View style={styles.centerPanel}>{center}</View> : null}
-          {right ? <View style={styles.rightPanel}>{right}</View> : null}
+          {right ? <View style={[styles.rightPanel, rightFlex !== undefined && { flex: rightFlex }]}>{right}</View> : null}
           {!left && !right && <View style={styles.full}>{children}</View>}
         </View>
       </ScrollView>
