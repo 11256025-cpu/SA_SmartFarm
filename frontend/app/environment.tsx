@@ -271,7 +271,7 @@ export default function EnvironmentScreen() {
             <View style={styles.godPanelControls}>
               {renderSliderControl('溫度', temperature, setTemperature, -30, 60, '°C')}
               {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%')}
-              {renderSliderControl('CO2 濃度', co2, setCo2, 300, 2000, 'ppm')}
+              {renderSliderControl('二氧化碳濃度', co2, setCo2, 300, 2000, 'ppm')}
               {renderSliderControl('光照強度', light, setLight, 0, 150000, 'lux')}
             </View>
         </View>
