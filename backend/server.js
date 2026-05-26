@@ -25,7 +25,7 @@ const db = new sqlite3.Database('./farm.db', (err) => {
 });
 
 // ==========================================
-// 💡 背景自動寫入機制 (修正欄位名稱為 history_soil)
+// 💡 背景自動寫入機制 (每 10 秒自動紀錄)
 // ==========================================
 setInterval(() => {
     const userIds = Object.keys(currentFarmStates);
@@ -35,22 +35,21 @@ setInterval(() => {
     userIds.forEach((uid) => {
         const state = currentFarmStates[uid];
         
-        // 💡 核心修正：將 history_soil_moisture 改成 history_soil
+        // 💡 這裡已修正：將 history_soil 改為 history_soil_moisture 以符合實體資料庫結構
         const sql = `
-            INSERT INTO HISTORY (user_id, history_temp, history_soil, history_light, history_co2, record_time) 
+            INSERT INTO HISTORY (user_id, history_temp, history_soil_moisture, history_light, history_co2, record_time) 
             VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))
         `;
         
         db.run(sql, [
             String(uid), 
             state.temperature, 
-            state.humidity, // 這裡對應控制面板的濕度數值
+            state.humidity, 
             state.light,
             state.co2
         ], (err) => {
             if (err) {
-                // 💡 如果還是報錯，我們把錯誤印得更詳細，方便追蹤
-                console.error(`❌ 定時寫入使用者 ${uid} 失敗，請檢查欄位名:`, err.message);
+                console.error(`❌ 定時寫入使用者 ${uid} 失敗:`, err.message);
             } else {
                 console.log(`🕒 [定時紀錄] 成功幫使用者 ${uid} 寫入歷史數據:`, state);
             }
@@ -60,12 +59,12 @@ setInterval(() => {
 
 
 // ==========================================
-//                  API 路由區塊
+//                 API 路由區塊
 // ==========================================
 
-// 💡 1. 偵錯專用 API
+// 💡 1. 偵錯專用 API (優化：使用 substr 切割日期展示)
 app.get('/api/debug/history', (req, res) => {
-    db.all("SELECT *, date(record_time) as datePart FROM HISTORY ORDER BY record_time DESC LIMIT 20", [], (err, rows) => {
+    db.all("SELECT *, substr(record_time, 1, 10) as datePart FROM HISTORY ORDER BY record_time DESC LIMIT 20", [], (err, rows) => {
         if (err) return res.status(500).json({ error: err.message });
         res.json({
             total_states_in_memory: currentFarmStates,
@@ -95,32 +94,48 @@ app.post('/api/simulator/update', (req, res) => {
     res.json({ success: true, currentState: currentFarmStates[uidStr] });
 });
 
-// 💡 3. 報表分頁查詢歷史數據 (同樣修正欄位查詢名稱)
+// 💡 3. 報表分頁查詢歷史數據 (🔥 終極相容防爆版)
 app.get('/api/reports/history', (req, res) => {
-    let { date, userId } = req.query;
+    let { startDate, endDate, date, userId } = req.query;
 
     if (!userId) userId = "1";
-    if (!date) return res.status(400).json({ success: false, message: "缺少查詢日期" });
+    
+    // 💡 核心相容轉換：如果前端傳過來的是舊版參數 date，我們自動幫它映射到 start 變數上
+    const start = startDate || date;
+    const end = endDate || start;
 
-    // 💡 核心修正：將 history_soil_moisture 改成 history_soil
+    if (!start) {
+        console.log("⚠️ 收到一個未包含任何日期參數的非法請求，拒絕查詢以免噴錯。");
+        return res.json({ success: false, historyData: [] }); // 安全回傳空陣列防爆
+    }
+
+    console.log(`📊 [API 歷史查詢] 使用者 ${userId} 正在查詢 ${start} 到 ${end} 的數據...`);
+
+    // 💡 這裡已修正：將 history_soil 改為 history_soil_moisture，維持輸出別名為 humidity 讓前端無感對接
     const sql = `
         SELECT 
             history_temp as temperature, 
-            history_soil as humidity, 
+            history_soil_moisture as humidity, 
             history_co2 as co2, 
             history_light as light, 
-            strftime('%H:%M', record_time) as timeStr 
+            CASE 
+                WHEN ? = ? THEN substr(record_time, 12, 5)
+                ELSE substr(record_time, 6, 11)
+            END as timeStr 
         FROM HISTORY 
-        WHERE strftime('%Y-%m-%d', record_time) = strftime('%Y-%m-%d', ?) AND user_id = ?
+        WHERE substr(record_time, 1, 10) BETWEEN ? AND ? AND user_id = ?
         ORDER BY record_time ASC
     `;
 
-    db.all(sql, [date, String(userId)], (err, rows) => {
+    db.all(sql, [start, end, start, end, String(userId)], (err, rows) => {
         if (err) {
             console.error("❌ 查詢歷史報表失敗:", err.message);
-            return res.status(500).json({ success: false, message: "資料庫查詢錯誤" });
+            return res.status(500).json({ success: false, historyData: [], message: "資料庫查詢錯誤" });
         }
-        res.json({ success: true, historyData: rows });
+        
+        const safeRows = rows || [];
+        console.log(`📊 查詢結果：成功找到 ${safeRows.length} 筆資料，即將發送回前端。`);
+        res.json({ success: true, historyData: safeRows });
     });
 });
 

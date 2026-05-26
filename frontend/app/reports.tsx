@@ -1,24 +1,82 @@
 import { FontAwesome } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { Dimensions, LayoutChangeEvent, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { Dimensions, LayoutChangeEvent, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { Calendar } from 'react-native-calendars';
 import { LineChart } from 'react-native-chart-kit';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
-const mockChartData = {
-  labels: ["00:00", "04:00", "08:00", "12:00", "16:00", "20:00"],
-  temp: [22, 21, 24, 28, 26, 23],
-  humid: [60, 65, 55, 45, 50, 58],
-  light: [0, 0, 15000, 85000, 45000, 0],
-  co2: [400, 420, 380, 350, 390, 410],
-};
+const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+interface DbRecord {
+  temperature: number;
+  humidity: number;
+  co2: number;
+  light: number;
+  timeStr: string;
+}
 
 export default function ReportsScreen() {
-  const [startDate, setStartDate] = useState<string>('');
+  const todayStr = new Date().toISOString().split('T')[0];
+  const [startDate, setStartDate] = useState<string>(todayStr);
   const [endDate, setEndDate] = useState<string>('');
+  
   const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2']);
   const [chartWidth, setChartWidth] = useState<number>(Dimensions.get('window').width * 0.5);
+
+  const [dbChartData, setDbChartData] = useState<{
+    labels: string[];
+    temp: number[];
+    humid: number[];
+    light: number[];
+    co2: number[];
+  }>({ labels: [], temp: [], humid: [], light: [], co2: [] });
+
+  const fetchHistoryData = async () => {
+    try {
+      const userId = await AsyncStorage.getItem('userId') || '1';
+      const finalEndDate = endDate || startDate;
+
+      console.log(`📡 前端發送請求 -> 日期區間: ${startDate} ~ ${finalEndDate}, 使用者: ${userId}`);
+
+      const response = await fetch(`${BASE_URL}/api/reports/history?startDate=${startDate}&endDate=${finalEndDate}&userId=${userId}`);
+      const json = await response.json();
+
+      if (json.success && Array.isArray(json.historyData) && json.historyData.length > 0) {
+        const records: DbRecord[] = json.historyData;
+
+        // 💡 體驗優化：如果點選單日，10秒一筆會造成 X 軸標籤爆炸。
+        // 我們讓標籤每 6 筆（約1分鐘）或根據總量抽樣顯示，畫面才乾淨。
+        const totalRecords = records.length;
+        const labelInterval = Math.ceil(totalRecords / 6); // 最多畫面上顯示 6 個時間點
+
+        const labels = records.map((r, index) => {
+          if (index === 0 || index === totalRecords - 1 || index % labelInterval === 0) {
+            return r.timeStr || '';
+          }
+          return ''; // 不顯示的標籤給空字串，套件會自動留空，不會疊在一起
+        });
+
+        const temp = records.map(r => Number(r.temperature) || 0);
+        // 💡 雙重保險：同時相容後端回傳的 humidity
+        const humid = records.map(r => Number(r.humidity) || 0);
+        const light = records.map(r => Number(r.light) || 0);
+        const co2 = records.map(r => Number(r.co2) || 0);
+
+        setDbChartData({ labels, temp, humid, light, co2 });
+      } else {
+        setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [] });
+      }
+    } catch (error) {
+      console.error('❌ 前端抓取歷史報表失敗:', error);
+      setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [] });
+    }
+  };
+
+  useEffect(() => {
+    fetchHistoryData();
+  }, [startDate, endDate]);
 
   const handleDayPress = (day: any) => {
     if (!startDate || (startDate && endDate)) {
@@ -27,42 +85,37 @@ export default function ReportsScreen() {
     } else {
       const date1 = new Date(startDate);
       const date2 = new Date(day.dateString);
-      if (date2 < date1) setStartDate(day.dateString);
-      else setEndDate(day.dateString);
+      if (date2 < date1) {
+        setStartDate(day.dateString);
+      } else {
+        setEndDate(day.dateString);
+      }
     }
   };
 
-  // 計算起訖之間所有日期並標記
-const getMarkedDates = () => {
-  if (!startDate) return {};
-  
-  const marked: any = {};
-  
-  // 只選了起始日
-  if (!endDate) {
-    marked[startDate] = { startingDay: true, endingDay: true, color: '#2e4f45', textColor: '#FFF' };
-    return marked;
-  }
-
-  // 起訖都選了，填滿中間
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const current = new Date(start);
-
-  while (current <= end) {
-    const dateStr = current.toISOString().split('T')[0];
-    if (dateStr === startDate) {
-      marked[dateStr] = { startingDay: true, color: '#2e4f45', textColor: '#FFF' };
-    } else if (dateStr === endDate) {
-      marked[dateStr] = { endingDay: true, color: '#2e4f45', textColor: '#FFF' };
-    } else {
-      marked[dateStr] = { color: '#47695e', textColor: '#FFF' };
+  const getMarkedDates = () => {
+    if (!startDate) return {};
+    const marked: any = {};
+    if (!endDate) {
+      marked[startDate] = { startingDay: true, endingDay: true, color: '#2e4f45', textColor: '#FFF' };
+      return marked;
     }
-    current.setDate(current.getDate() + 1);
-  }
-
-  return marked;
-};
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const current = new Date(start);
+    while (current <= end) {
+      const dateStr = current.toISOString().split('T')[0];
+      if (dateStr === startDate) {
+        marked[dateStr] = { startingDay: true, color: '#2e4f45', textColor: '#FFF' };
+      } else if (dateStr === endDate) {
+        marked[dateStr] = { endingDay: true, color: '#2e4f45', textColor: '#FFF' };
+      } else {
+        marked[dateStr] = { color: '#47695e', textColor: '#FFF' };
+      }
+      current.setDate(current.getDate() + 1);
+    }
+    return marked;
+  };
 
   const toggleChart = (key: string) => {
     setSelectedCharts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -112,21 +165,48 @@ const getMarkedDates = () => {
         <View style={styles.rightWrapper} onLayout={onRightPanelLayout}>
           <ScrollView contentContainerStyle={styles.chartScrollContainer}>
             {chartWidth > 0 && selectedCharts.map((key) => {
-            const opt = chartOptions.find(o => o.key === key);
-            if (!opt) return null;
-            return (
-              <View key={key} style={styles.chartCard}>
-                <Text style={styles.chartTitle}>{opt.label}</Text>
-                <LineChart
-                  data={{ labels: mockChartData.labels, datasets: [{ data: mockChartData[key as keyof typeof mockChartData], color: () => opt.color }] }}
+              const opt = chartOptions.find(o => o.key === key);
+              if (!opt) return null;
+
+              if (!dbChartData.labels || dbChartData.labels.length < 2) {
+                return (
+                  <View key={key} style={styles.chartCard}>
+                    <Text style={styles.chartTitle}>{opt.label}</Text>
+                    <View style={styles.noDataContainer}>
+                      <Text style={{ color: colors.muted, textAlign: 'center', paddingHorizontal: 10 }}>
+                        {dbChartData.labels && dbChartData.labels.length === 1 
+                          ? '⏳ 歷史數據累積中（折線圖繪製至少需要 2 筆以上的資料點）...' 
+                          : '⚠️ 所選日期區間目前無足夠歷史暫存數據'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }
+
+              return (
+                <View key={key} style={styles.chartCard}>
+                  <Text style={styles.chartTitle}>{opt.label}</Text>
+                  <LineChart
+                    data={{ 
+                      labels: dbChartData.labels, 
+                      datasets: [{ data: dbChartData[key as keyof typeof dbChartData] || [], color: () => opt.color }] 
+                    }}
                     width={chartWidth - 55}
-                  height={220}
-                    chartConfig={{ backgroundGradientFrom: colors.card, backgroundGradientTo: colors.card, color: (opacity=1) => `rgba(255, 255, 255, ${opacity})` }}
-                  bezier
-                />
-              </View>
-            );
-          })}
+                    height={220}
+                    chartConfig={{ 
+                      backgroundGradientFrom: colors.card, 
+                      backgroundGradientTo: colors.card, 
+                      color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                      labelColor: (opacity = 1) => colors.muted,
+                      propsForDots: { r: "3", strokeWidth: "1", stroke: opt.color }
+                    }}
+                    propsForHorizontalLabels={{ fontSize: 10 }}
+                    propsForVerticalLabels={{ fontSize: 10 }}
+                    bezier
+                  />
+                </View>
+              );
+            })}
           </ScrollView>
         </View>
       )}
@@ -145,5 +225,6 @@ const styles = StyleSheet.create({
   rightWrapper: { flex: 1, width: '100%' },
   chartScrollContainer: { paddingBottom: 30 },
   chartCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.xl, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.border },
-  chartTitle: { color: colors.text, fontSize: typography.large, fontWeight: 'bold', marginBottom: spacing.md }
+  chartTitle: { color: colors.text, fontSize: typography.large, fontWeight: 'bold', marginBottom: spacing.md },
+  noDataContainer: { height: 220, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: radii.md }
 });
