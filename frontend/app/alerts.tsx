@@ -60,7 +60,7 @@ export default function AlertsScreen() {
   const [alertLogs, setAlertLogs] = useState([
     { id: 1, type: '濕度', msg: '土壤濕度過低 (25%)', time: '10:30', date: '2024/05/19' },
     { id: 2, type: '溫度', msg: '環境溫度過高 (38°C)', time: '09:15', date: '2024/05/19' },
-    { id: 3, type: 'CO2', msg: 'CO2 濃度異常 (1250ppm)', time: '昨天', date: '2024/05/18' },
+    { id: 3, type: '二氧化碳', msg: '二氧化碳 濃度異常 (1250ppm)', time: '昨天', date: '2024/05/18' },
     { id: 4, type: '光照', msg: '光照強度過低 (300lux)', time: '前天', date: '2024/05/17' },
   ]);
 
