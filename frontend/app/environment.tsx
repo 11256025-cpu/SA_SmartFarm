@@ -208,13 +208,6 @@ export default function EnvironmentScreen() {
               </View>
 
               <View style={styles.card}>
-                <Text style={styles.cardTitle}>光照強度</Text>
-                <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, isWarning(light, thresholds.lightRange) && styles.textAlert]}>{Math.round(light).toLocaleString()} <Text style={styles.cardUnit}>lux</Text></Text>
-                </View>
-              </View>
-
-              <View style={styles.card}>
                 <Text style={styles.cardTitle}>土壤濕度</Text>
                 <View style={styles.cardValueContainer}>
                   <Text style={[styles.cardValue, isWarning(humidity, thresholds.humidRange) && styles.textAlert]}>{Math.round(humidity)} <Text style={styles.cardUnit}>%</Text></Text>
@@ -230,7 +223,15 @@ export default function EnvironmentScreen() {
                   <Text style={[styles.cardValue, isWarning(co2, thresholds.co2Range) && styles.textAlert]}>{Math.round(co2)} <Text style={styles.cardUnit}>ppm</Text></Text>
                 </View>
               </View>
+
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>光照強度</Text>
+                <View style={styles.cardValueContainer}>
+                  <Text style={[styles.cardValue, isWarning(light, thresholds.lightRange) && styles.textAlert]}>{Math.round(light).toLocaleString()} <Text style={styles.cardUnit}>lux</Text></Text>
+                </View>
+              </View>
             </View>
+            
 
             <View style={styles.horizontalDivider} />
 
