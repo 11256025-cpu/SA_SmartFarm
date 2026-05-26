@@ -1,14 +1,19 @@
 import { FontAwesome } from '@expo/vector-icons';
 import Slider from '@react-native-community/slider';
+import AsyncStorage from '@react-native-async-storage/async-storage'; // 💡 新增：用來拿取 userId
 import { router } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native'; // 💡 新增：確保每次切換回此頁面都會重新抓資料
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
+// 💡 自動判斷執行環境
+const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
 export default function EnvironmentScreen() {
-  // 1. 環境狀態變數
+  // 1. 環境狀態變數 (控制面板的當前數值)
   const [temperature, setTemperature] = useState(25);
   const [light, setLight] = useState(100000);
   const [humidity, setHumidity] = useState(25);
@@ -22,22 +27,64 @@ export default function EnvironmentScreen() {
   const [activeAlerts, setActiveAlerts] = useState<string[]>([]);
   const [hideNotification, setHideNotification] = useState(false);
 
-  const slideAnim = useRef(new Animated.Value(400)).current; // 初始位置在右邊畫面外
+  const slideAnim = useRef(new Animated.Value(400)).current; 
 
-  // 3. 異常判斷邏輯
+  // 💡 3. 新增：警示閾值狀態 (預設先給寬鬆一點，等 API 回傳後覆蓋)
+  const [thresholds, setThresholds] = useState({
+    tempRange: [15, 35],
+    humidRange: [30, 80],
+    co2Range: [400, 1000],
+    lightRange: [500, 50000]
+  });
+
+  // 💡 4. 新增：向後端請求使用者最新的設定
+  const fetchSettings = async () => {
+    try {
+      let uid = await AsyncStorage.getItem('userId') || '1';
+      const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${uid}`);
+      const data = await resp.json();
+      
+      if (data.success && data.settings) {
+        setThresholds({
+          tempRange: data.settings.tempRange || [15, 35],
+          humidRange: data.settings.humidRange || [30, 80],
+          co2Range: data.settings.co2Range || [400, 1000],
+          lightRange: data.settings.lightRange || [500, 50000]
+        });
+      }
+    } catch (error) {
+      console.warn('載入警示設定失敗，使用預設值。', error);
+    }
+  };
+
+  // 💡 5. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
+  useFocusEffect(
+    useCallback(() => {
+      fetchSettings();
+    }, [])
+  );
+
+  // 💡 6. 共用的異常判斷小工具
+  const isWarning = (currentValue: number, range: number[]) => {
+    if (!range || range.length !== 2) return false;
+    return currentValue < range[0] || currentValue > range[1];
+  };
+
+  // 💡 7. 異常判斷邏輯 (依賴 thresholds 的動態範圍)
   useEffect(() => {
     const alerts: string[] = [];
-    if (temperature > 35) alerts.push('temperature');
-    if (humidity < 30) alerts.push('humidity');
-    if (co2 > 1000) alerts.push('co2');
-    if (light < 20000) alerts.push('light');
+    if (isWarning(temperature, thresholds.tempRange)) alerts.push('temperature');
+    if (isWarning(humidity, thresholds.humidRange)) alerts.push('humidity');
+    if (isWarning(co2, thresholds.co2Range)) alerts.push('co2');
+    if (isWarning(light, thresholds.lightRange)) alerts.push('light');
+    
     setActiveAlerts(alerts);
     setShowWarning(alerts.length > 0);
     // 當警示內容變更時，開啟通知顯示
     setHideNotification(false);
-  }, [temperature, humidity, co2, light]);
+  }, [temperature, humidity, co2, light, thresholds]); // 記得將 thresholds 加入依賴
 
-  // 4. 滑入動畫邏輯
+  // 滑入動畫邏輯
   const isVisible = activeAlerts.length > 0 && !hideNotification;
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -48,19 +95,13 @@ export default function EnvironmentScreen() {
     }).start();
   }, [isVisible, slideAnim]);
 
-  // 5. 儲存設定連動資料庫
+  // 儲存排程連動資料庫
   const handleSaveSchedule = async () => {
     try {
-      // 💡 如果是實機測試，請將 localhost 改為你電腦的局域網路 IP (例如 'http://192.168.1.100:3000/api/schedule')
-      const response = await fetch('http://localhost:3000/api/schedule', {
+      const response = await fetch(`${BASE_URL}/api/schedule`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          frequency: frequency,
-          duration: duration,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ frequency, duration }),
       });
 
       const data = await response.json();
@@ -75,33 +116,34 @@ export default function EnvironmentScreen() {
     }
   };
 
+  // 💡 8. 動態生成警示文案
   const getAlertContent = (type: string) => {
     switch (type) {
       case 'temperature':
         return {
-          title: '溫度過高',
-          message: `偵測到溫度 ${temperature}°C，高於安全上限 35°C。建議查看警示條件並採取處理。`,
+          title: '溫度異常',
+          message: `偵測到溫度 ${Math.round(temperature)}°C，不在安全範圍 (${thresholds.tempRange[0]}~${thresholds.tempRange[1]}°C)。建議查看警示條件並採取處理。`,
           actionLabel: '前往設定',
           action: () => router.replace('/alerts'),
         };
       case 'humidity':
         return {
-          title: '土壤濕度過低',
-          message: `偵測到土壤濕度 ${humidity}%，低於安全下限 30%。建議查看警示條件並採取處理。`,
+          title: '土壤濕度異常',
+          message: `偵測到土壤濕度 ${Math.round(humidity)}%，不在安全範圍 (${thresholds.humidRange[0]}~${thresholds.humidRange[1]}%)。建議查看警示條件並採取處理。`,
           actionLabel: '前往設定',
           action: () => router.replace('/alerts'),
         };
       case 'co2':
         return {
-          title: 'CO₂ 濃度過高',
-          message: `偵測到 CO₂ ${co2} ppm，高於 1000 ppm。建議查看警示條件並採取處理。`,
+          title: 'CO₂ 濃度異常',
+          message: `偵測到 CO₂ ${Math.round(co2)} ppm，不在安全範圍 (${thresholds.co2Range[0]}~${thresholds.co2Range[1]} ppm)。建議查看警示條件並採取處理。`,
           actionLabel: '前往設定',
           action: () => router.replace('/alerts'),
         };
       case 'light':
         return {
-          title: '光照不足',
-          message: `偵測到光照 ${light.toLocaleString()} lux，低於 20000 lux。建議查看警示條件並採取處理。`,
+          title: '光照強度異常',
+          message: `偵測到光照 ${Math.round(light).toLocaleString()} lux，不在安全範圍 (${thresholds.lightRange[0]}~${thresholds.lightRange[1]} lux)。建議查看警示條件並採取處理。`,
           actionLabel: '前往設定',
           action: () => router.replace('/alerts'),
         };
@@ -131,45 +173,12 @@ export default function EnvironmentScreen() {
     </View>
   );
 
-  // 下拉選單樣式
-  const pickerSelectStyles = StyleSheet.create({
-    inputIOS: {
-      color: '#000000',          // 黑色文字
-      paddingLeft: 12,
-      paddingRight: 30,          // 預留空間給右側箭頭
-      fontSize: typography.body,
-      height: 36,
-      backgroundColor: 'transparent',
-    },
-    inputAndroid: {
-      color: '#000000',          // 黑色文字
-      paddingLeft: 12,
-      paddingRight: 30,          // 預留空間給右側箭頭
-      fontSize: typography.body,
-      height: 36,
-      backgroundColor: 'transparent',
-    },
-    inputWeb: {
-      color: '#000000',          // 黑色文字
-      paddingLeft: 12,
-      paddingRight: 30,          // 預留空間給右側箭頭
-      fontSize: typography.body,
-      height: 36,
-      backgroundColor: 'transparent',
-      borderWidth: 0,            // 拔除 Web 原生邊框
-      outlineStyle: 'none',      // 拔除網頁點擊時的外框線
-      appearance: 'none',
-      WebkitAppearance: 'none',
-      MozAppearance: 'none',
-      cursor: 'pointer',
-    },
-    placeholder: {
-      color: '#999999',
-    },
-    iconContainer: {
-      top: 12,
-      right: 10,
-    },
+  const pickerSelectStyles = /* ... 維持不變 ... */ StyleSheet.create({
+    inputIOS: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
+    inputAndroid: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
+    inputWeb: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent', borderWidth: 0, outlineStyle: 'none', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', cursor: 'pointer' },
+    placeholder: { color: '#999999' },
+    iconContainer: { top: 12, right: 10 },
   });
 
   return (
@@ -184,8 +193,8 @@ export default function EnvironmentScreen() {
           }
         }}
         hasUnreadAlerts={activeAlerts.length > 0}
-      leftFlex={6}
-      rightFlex={4}
+        leftFlex={6}
+        rightFlex={4}
         left={(
           <>
           <View style={styles.leftColumn}>
@@ -193,21 +202,22 @@ export default function EnvironmentScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>溫度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, temperature > 35 && styles.textAlert]}>{Math.round(temperature)} <Text style={styles.cardUnit}>°C</Text></Text>
+                  {/* 💡 套用新邏輯：超標就套用紅色 textAlert 樣式 */}
+                  <Text style={[styles.cardValue, isWarning(temperature, thresholds.tempRange) && styles.textAlert]}>{Math.round(temperature)} <Text style={styles.cardUnit}>°C</Text></Text>
                 </View>
               </View>
 
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>光照強度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, light < 20000 && styles.textAlert]}>{Math.round(light).toLocaleString()} <Text style={styles.cardUnit}>lux</Text></Text>
+                  <Text style={[styles.cardValue, isWarning(light, thresholds.lightRange) && styles.textAlert]}>{Math.round(light).toLocaleString()} <Text style={styles.cardUnit}>lux</Text></Text>
                 </View>
               </View>
 
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>土壤濕度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, humidity < 30 && styles.textAlert]}>{Math.round(humidity)} <Text style={styles.cardUnit}>%</Text></Text>
+                  <Text style={[styles.cardValue, isWarning(humidity, thresholds.humidRange) && styles.textAlert]}>{Math.round(humidity)} <Text style={styles.cardUnit}>%</Text></Text>
                 </View>
                 <TouchableOpacity style={styles.actionButton} onPress={() => setHumidity(50)}>
                   <Text style={styles.actionButtonText}>手動灌溉</Text>
@@ -217,7 +227,7 @@ export default function EnvironmentScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>二氧化碳濃度</Text>
                 <View style={styles.cardValueContainer}>
-                  <Text style={[styles.cardValue, co2 > 1000 && styles.textAlert]}>{Math.round(co2)} <Text style={styles.cardUnit}>ppm</Text></Text>
+                  <Text style={[styles.cardValue, isWarning(co2, thresholds.co2Range) && styles.textAlert]}>{Math.round(co2)} <Text style={styles.cardUnit}>ppm</Text></Text>
                 </View>
               </View>
             </View>
@@ -226,42 +236,24 @@ export default function EnvironmentScreen() {
 
             <View style={styles.scheduleCard}>
               <Text style={styles.scheduleTitle}>自動灌溉排程</Text>
-              
-              {/* 第一排：灌溉頻率 */}
               <View style={styles.scheduleRow}>
                 <Text style={styles.scheduleLabel}>灌溉頻率</Text>
                 <Text style={styles.scheduleText}>每隔</Text>
                 <View style={styles.pickerWrapper}>
-                  <RNPickerSelect
-                    value={frequency}
-                    onValueChange={(value) => setFrequency(value)}
-                    items={[{ label: '1', value: 1 },{ label: '2', value: 2 },{ label: '4', value: 4 },{ label: '8', value: 8 },{ label: '12', value: 12 },{ label: '24', value: 24 }]}
-                    style={pickerSelectStyles}
-                    useNativeAndroidPickerStyle={false}
-                    Icon={() => <FontAwesome name="chevron-down" size={12} color="#64748B" />}
-                  />
+                  <RNPickerSelect value={frequency} onValueChange={setFrequency} items={[{ label: '1', value: 1 },{ label: '2', value: 2 },{ label: '4', value: 4 },{ label: '8', value: 8 },{ label: '12', value: 12 },{ label: '24', value: 24 }]} style={pickerSelectStyles} useNativeAndroidPickerStyle={false} Icon={() => <FontAwesome name="chevron-down" size={12} color="#64748B" />} />
                 </View>
                 <Text style={styles.scheduleText}>分鐘灌溉一次</Text>
               </View>
 
-          {/* 第二排：單次時長 */}
               <View style={styles.scheduleRow}>
                 <Text style={styles.scheduleLabel}>單次時長</Text>
                 <Text style={styles.scheduleText}>一次灌溉</Text>
                 <View style={styles.pickerWrapper}>
-                  <RNPickerSelect
-                    value={duration}
-                    onValueChange={(value) => setDuration(value)}
-                    items={[{ label: '1', value: 1 },{ label: '5', value: 5 },{ label: '10', value: 10 },{ label: '20', value: 20 },{ label: '30', value: 30 },{ label: '60', value: 60 }]}
-                    style={pickerSelectStyles}
-                    useNativeAndroidPickerStyle={false}
-                    Icon={() => <FontAwesome name="chevron-down" size={12} color="#64748B" />}
-                  />
+                  <RNPickerSelect value={duration} onValueChange={setDuration} items={[{ label: '1', value: 1 },{ label: '5', value: 5 },{ label: '10', value: 10 },{ label: '20', value: 20 },{ label: '30', value: 30 },{ label: '60', value: 60 }]} style={pickerSelectStyles} useNativeAndroidPickerStyle={false} Icon={() => <FontAwesome name="chevron-down" size={12} color="#64748B" />} />
                 </View>
                 <Text style={styles.scheduleText}>分鐘</Text>
               </View>
 
-              {/* 獨立儲存按鈕：放至排程卡片右下角 */}
               <View style={styles.scheduleFooter}>
                 <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchedule}>
                   <Text style={styles.saveButtonText}>儲存設定</Text>
@@ -285,7 +277,6 @@ export default function EnvironmentScreen() {
         )}
       />
       
-      {/* 獨立在右上方浮動的通知面板 */}
       {activeAlerts.length > 0 && (
         <Animated.View style={[styles.floatingNotificationPanel, { transform: [{ translateX: slideAnim }] }]}>
           <Text style={styles.notificationPanelHeader}><FontAwesome name="bell" size={14} color="#FFF" />  異常警示</Text>
@@ -319,7 +310,9 @@ export default function EnvironmentScreen() {
   );
 }
 
+// styles 陣列無需變更，沿用你原本的即可
 const styles = StyleSheet.create({
+  /* ...（這裡放入你原本的完整 StyleSheet 即可）... */
   scrollContent: { flexGrow: 1, alignItems: 'center' },
   mainLayout: { flexDirection: 'row', width: '100%', maxWidth: 1200, padding: spacing.xxl },
   leftColumn: { flex: 1 },
@@ -346,28 +339,13 @@ const styles = StyleSheet.create({
   horizontalDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md, width: '100%' },
   scheduleCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.xl },
   scheduleTitle: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold', marginBottom: spacing.lg },
-  
-  // 讓每一排的元素（標題、下拉選單、文字）維持水平置中對齊
   scheduleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.md, width: '100%' },
   scheduleLabel: { color: colors.subtle, fontSize: 16, width: 80 },
   scheduleText: { color: colors.text, fontSize: typography.body, marginHorizontal: 8 },
-  
-  pickerWrapper: {
-    backgroundColor: '#FFFFFF',    // 純白色背景
-    borderRadius: 8,              // 圓角
-    borderWidth: 1,
-    borderColor: '#64748B',       // 加深外框顏色讓選單更明顯
-    minWidth: 80,                 // 防止文字擠壓
-    height: 36,                   // 稍微拉高讓文字更好垂直居中
-    justifyContent: 'center',
-    overflow: 'hidden',           // 切除內部元件多餘黑線的關鍵
-  },
-  
-  // 💡 排版核心：將按鈕獨立為一排並靠右對齊
+  pickerWrapper: { backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: '#64748B', minWidth: 80, height: 36, justifyContent: 'center', overflow: 'hidden' },
   scheduleFooter: { marginTop: 10, alignItems: 'flex-end', width: '100%' },
   saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md },
   saveButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
-  
   godPanelHeader: { color: colors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
   godPanelSub: { color: colors.subMuted, fontSize: typography.small, marginBottom: 30 },
   godPanelControls: { flexDirection: 'column' },
