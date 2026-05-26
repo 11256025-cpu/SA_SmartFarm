@@ -1,10 +1,10 @@
 import { FontAwesome } from '@expo/vector-icons';
-import Slider from '@react-native-community/slider';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // 💡 新增：用來拿取 userId
-import { router } from 'expo-router';
+import Slider from '@react-native-community/slider';
 import { useFocusEffect } from '@react-navigation/native'; // 💡 新增：確保每次切換回此頁面都會重新抓資料
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -26,6 +26,9 @@ export default function EnvironmentScreen() {
   const [showWarning, setShowWarning] = useState(false);
   const [activeAlerts, setActiveAlerts] = useState<string[]>([]);
   const [hideNotification, setHideNotification] = useState(false);
+  
+  // 3. 追蹤是否已載入儲存的設定 (避免多次保存)
+  const [isLoaded, setIsLoaded] = useState(false);
 
   const slideAnim = useRef(new Animated.Value(400)).current; 
 
@@ -37,7 +40,7 @@ export default function EnvironmentScreen() {
     lightRange: [500, 50000]
   });
 
-  // 💡 4. 新增：向後端請求使用者最新的設定
+  // 💡 4. 向後端請求使用者最新的設定 (已完成多使用者綁定)
   const fetchSettings = async () => {
     try {
       let uid = await AsyncStorage.getItem('userId') || '1';
@@ -57,20 +60,91 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 💡 5. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
+  // 💡 5. 優化：放開滑軌時，通知後端暫存目前最新數值的非同步方法 (補上 userId)
+  const updateBackendSimulator = async (updatedValues: { temperature?: number; humidity?: number; co2?: number; light?: number }) => {
+    try {
+      let uid = await AsyncStorage.getItem('userId') || '1'; // 👈 核心：獲取當前登入的使用者 ID
+
+      await fetch(`${BASE_URL}/api/simulator/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: uid, // 👈 核心：告訴後端這是「誰」在拉滑動條
+          ...updatedValues
+        }),
+      });
+    } catch (error) {
+      console.error("同步後端模擬環境數據失敗:", error);
+    }
+  };
+
+  // 💡 5.5 新增：保存控制面板設定值到 AsyncStorage
+  const saveControlSettings = async (settings: { temperature?: number; humidity?: number; co2?: number; light?: number; frequency?: number; duration?: number }) => {
+    try {
+      const currentSettings = await AsyncStorage.getItem('controlSettings');
+      const existing = currentSettings ? JSON.parse(currentSettings) : {};
+      const updated = { ...existing, ...settings };
+      await AsyncStorage.setItem('controlSettings', JSON.stringify(updated));
+    } catch (error) {
+      console.error('保存控制面板設定失敗:', error);
+    }
+  };
+
+  // 💡 5.6 新增：從 AsyncStorage 載入控制面板設定值
+  const loadControlSettings = async () => {
+    try {
+      const savedSettings = await AsyncStorage.getItem('controlSettings');
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings);
+        if (settings.temperature !== undefined) setTemperature(settings.temperature);
+        if (settings.humidity !== undefined) setHumidity(settings.humidity);
+        if (settings.co2 !== undefined) setCo2(settings.co2);
+        if (settings.light !== undefined) setLight(settings.light);
+        if (settings.frequency !== undefined) setFrequency(settings.frequency);
+        if (settings.duration !== undefined) setDuration(settings.duration);
+      }
+    } catch (error) {
+      console.error('載入控制面板設定失敗，使用預設值。', error);
+    } finally {
+      setIsLoaded(true);
+    }
+  };
+
+  // 💡 6. 新增：頁面首次加載時或切回時載入保存的設定
+  useEffect(() => {
+    if (!isLoaded) {
+      loadControlSettings();
+    }
+  }, [isLoaded]);
+
+  // 💡 7. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
   useFocusEffect(
     useCallback(() => {
       fetchSettings();
     }, [])
   );
 
-  // 💡 6. 共用的異常判斷小工具
+  // 💡 7.5 新增：監聽控制面板值變化，自動保存到 AsyncStorage
+  useEffect(() => {
+    if (isLoaded) {
+      saveControlSettings({
+        temperature,
+        humidity,
+        co2,
+        light,
+        frequency,
+        duration
+      });
+    }
+  }, [temperature, humidity, co2, light, frequency, duration, isLoaded]);
+
+  // 💡 8. 共用的異常判斷小工具
   const isWarning = (currentValue: number, range: number[]) => {
     if (!range || range.length !== 2) return false;
     return currentValue < range[0] || currentValue > range[1];
   };
 
-  // 💡 7. 異常判斷邏輯 (依賴 thresholds 的動態範圍)
+  // 💡 9. 異常判斷邏輯 (依賴 thresholds 的動態範圍)
   useEffect(() => {
     const alerts: string[] = [];
     if (isWarning(temperature, thresholds.tempRange)) alerts.push('temperature');
@@ -95,13 +169,19 @@ export default function EnvironmentScreen() {
     }).start();
   }, [isVisible, slideAnim]);
 
-  // 儲存排程連動資料庫
+  // 💡 10. 優化：儲存排程連動資料庫 (補上 userId 隔離排程)
   const handleSaveSchedule = async () => {
     try {
+      let uid = await AsyncStorage.getItem('userId') || '1'; // 👈 核心：獲取當前登入的使用者 ID
+
       const response = await fetch(`${BASE_URL}/api/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ frequency, duration }),
+        body: JSON.stringify({ 
+          userId: uid, // 👈 核心：連同 user_id 一起送去，防止覆蓋其他人的排程
+          frequency, 
+          duration 
+        }),
       });
 
       const data = await response.json();
@@ -116,7 +196,7 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 💡 8. 動態生成警示文案
+  // 💡 11. 動態生成警示文案
   const getAlertContent = (type: string) => {
     switch (type) {
       case 'temperature':
@@ -153,7 +233,7 @@ export default function EnvironmentScreen() {
   };
 
   // 控制面板滑軌元件
-  const renderSliderControl = (label: string, value: number, setter: any, min: number, max: number, unit: string) => (
+  const renderSliderControl = (label: string, value: number, setter: any, min: number, max: number, unit: string, apiKey: string) => (
     <View style={styles.controlRow}>
       <View style={styles.controlLabelGroup}>
         <Text style={styles.controlLabel}>{label}</Text>
@@ -165,6 +245,9 @@ export default function EnvironmentScreen() {
         maximumValue={max}
         value={value}
         onValueChange={setter}
+        onSlidingComplete={(v) => { 
+          updateBackendSimulator({ [apiKey]: Math.round(v) });
+        }}
         step={1}
         minimumTrackTintColor={colors.primary}
         maximumTrackTintColor={colors.border}
@@ -173,7 +256,7 @@ export default function EnvironmentScreen() {
     </View>
   );
 
-  const pickerSelectStyles = /* ... 維持不變 ... */ StyleSheet.create({
+  const pickerSelectStyles = StyleSheet.create({
     inputIOS: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
     inputAndroid: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
     inputWeb: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent', borderWidth: 0, outlineStyle: 'none', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', cursor: 'pointer' },
@@ -202,7 +285,6 @@ export default function EnvironmentScreen() {
               <View style={styles.card}>
                 <Text style={styles.cardTitle}>溫度</Text>
                 <View style={styles.cardValueContainer}>
-                  {/* 💡 套用新邏輯：超標就套用紅色 textAlert 樣式 */}
                   <Text style={[styles.cardValue, isWarning(temperature, thresholds.tempRange) && styles.textAlert]}>{Math.round(temperature)} <Text style={styles.cardUnit}>°C</Text></Text>
                 </View>
               </View>
@@ -212,7 +294,10 @@ export default function EnvironmentScreen() {
                 <View style={styles.cardValueContainer}>
                   <Text style={[styles.cardValue, isWarning(humidity, thresholds.humidRange) && styles.textAlert]}>{Math.round(humidity)} <Text style={styles.cardUnit}>%</Text></Text>
                 </View>
-                <TouchableOpacity style={styles.actionButton} onPress={() => setHumidity(50)}>
+                <TouchableOpacity style={styles.actionButton} onPress={() => {
+                  setHumidity(50);
+                  updateBackendSimulator({ humidity: 50 }); 
+                }}>
                   <Text style={styles.actionButtonText}>手動灌溉</Text>
                 </TouchableOpacity>
               </View>
@@ -269,10 +354,10 @@ export default function EnvironmentScreen() {
             <Text style={styles.godPanelHeader}><FontAwesome name="sliders" size={18} color="#FFF" /> 控制面板</Text>
             <Text style={styles.godPanelSub}>模擬硬體回傳數值</Text>
             <View style={styles.godPanelControls}>
-              {renderSliderControl('溫度', temperature, setTemperature, -30, 60, '°C')}
-              {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%')}
-              {renderSliderControl('二氧化碳濃度', co2, setCo2, 300, 2000, 'ppm')}
-              {renderSliderControl('光照強度', light, setLight, 0, 150000, 'lux')}
+              {renderSliderControl('溫度', temperature, setTemperature, -30, 60, '°C', 'temperature')}
+              {renderSliderControl('土壤濕度', humidity, setHumidity, 0, 100, '%', 'humidity')}
+              {renderSliderControl('二氧化碳濃度', co2, setCo2, 300, 2000, 'ppm', 'co2')}
+              {renderSliderControl('光照強度', light, setLight, 0, 150000, 'lux', 'light')}
             </View>
         </View>
         )}
@@ -311,9 +396,9 @@ export default function EnvironmentScreen() {
   );
 }
 
-// styles 陣列無需變更，沿用你原本的即可
+// ⚠️ 原有 styles 排版維持不變，此處省略...
 const styles = StyleSheet.create({
-  /* ...（這裡放入你原本的完整 StyleSheet 即可）... */
+  // ... 維持你原本在底部的樣式表即可
   scrollContent: { flexGrow: 1, alignItems: 'center' },
   mainLayout: { flexDirection: 'row', width: '100%', maxWidth: 1200, padding: spacing.xxl },
   leftColumn: { flex: 1 },
