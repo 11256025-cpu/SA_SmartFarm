@@ -1,21 +1,24 @@
 // app/(auth)/login.tsx
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react'; // 💡 這裡引入了 useRef
+import React, { useRef, useState } from 'react'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
-  // 💡 新增一個狀態來儲存並顯示紅字錯誤訊息
-  const [errorMessage, setErrorMessage] = useState('');
+  
+  // 💡 分拆錯誤狀態，讓各自的錯誤顯示在各自的輸入框底下
+  const [accountError, setAccountError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
-  // 💡 建立一個密碼輸入框的錨點 (Ref)
+  // 建立一個密碼輸入框的錨點 (Ref)
   const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
-    // 每次點擊登入時，先清空先前的錯誤訊息
-    setErrorMessage('');
+    // 每次點擊登入時，先清空所有先前的錯誤訊息
+    setAccountError('');
+    setPasswordError('');
 
     if (!account || !password) {
       alert("請輸入帳號與密碼！");
@@ -23,14 +26,13 @@ export default function LoginScreen() {
     }
 
     try {
-      // 這裡直接使用 localhost
       const response = await fetch('http://localhost:3000/api/login', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: account, // 將前端的 account 轉成後端要的 username
+          username: account, 
           password: password
         })
       });
@@ -38,10 +40,10 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (data.success) {
-        // 取得使用者 id（在資料庫 schema 中為 user_id）
+        // 取得使用者 id
         const userId = data.user?.user_id ?? data.user?.id ?? null;
 
-        // 將 userId 存到本地，以便其他頁面 (如 Alerts) 讀取
+        // 將 userId 存到本地
         if (userId) {
           try {
             await AsyncStorage.setItem('userId', String(userId));
@@ -78,25 +80,37 @@ export default function LoginScreen() {
         // 導向主畫面
         router.replace('/environment');
       } else {
-        // 💡 登入失敗時，不再跳 alert，而是直接將錯誤訊息顯示在畫面上
-        setErrorMessage("密碼輸入錯誤");
+        const msg = data.message || '';
+        
+        // 💡 根據後端錯誤訊息內容，把錯誤指定到對應的欄位狀態上
+        if (
+          msg.includes('查無') || 
+          msg.includes('不存在') || 
+          msg.includes('找不到') || 
+          msg.toLowerCase().includes('not found') ||
+          msg.toLowerCase().includes('exist')
+        ) {
+          setAccountError("帳號不存在"); // 顯示在帳號框底下
+        } else {
+          setPasswordError("密碼輸入錯誤"); // 顯示在密碼框底下
+        }
       }
     } catch (error) {
       console.error("連線錯誤:", error);
-      setErrorMessage("無法連線到伺服器，請確認後端已啟動！");
+      setPasswordError("無法連線到伺服器，請確認後端已啟動！");
     }
   };
 
-  // 💡 當使用者重新輸入帳號時，順便把錯誤訊息洗掉
+  // 當使用者重新輸入帳號時，洗掉帳號錯誤訊息
   const handleAccountChange = (text: string) => {
     setAccount(text);
-    if (errorMessage) setErrorMessage('');
+    if (accountError) setAccountError('');
   };
 
-  // 💡 當使用者重新輸入密碼時，順便把錯誤訊息洗掉
+  // 當使用者重新輸入密碼時，洗掉密碼錯誤訊息
   const handlePasswordChange = (text: string) => {
     setPassword(text);
-    if (errorMessage) setErrorMessage('');
+    if (passwordError) setPasswordError('');
   };
 
   return (
@@ -124,12 +138,17 @@ export default function LoginScreen() {
                 placeholder="請輸入您的帳號"
                 placeholderTextColor="#666"
                 value={account}
-                onChangeText={handleAccountChange} // 💡 改用有包含清除錯誤邏輯的函式
+                onChangeText={handleAccountChange} 
                 keyboardType="default"
                 autoCapitalize="none"
                 returnKeyType="next"
                 onSubmitEditing={() => passwordInputRef.current?.focus()}
               />
+              
+              {/* 💡 新增：當 accountError 有內容時，在帳號輸入框下方顯示紅字 */}
+              {accountError ? (
+                <Text style={styles.errorText}>{accountError}</Text>
+              ) : null}
             </View>
 
             {/* 密碼輸入框 */}
@@ -141,16 +160,16 @@ export default function LoginScreen() {
                 placeholder="請輸入您的密碼"
                 placeholderTextColor="#666"
                 value={password}
-                onChangeText={handlePasswordChange} // 💡 改用有包含清除錯誤邏輯的函式
+                onChangeText={handlePasswordChange} 
                 secureTextEntry
                 autoCapitalize="none"
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}
               />
               
-              {/* 💡 核心新增：當 errorMessage 有內容時，動態渲染紅色錯誤文字 */}
-              {errorMessage ? (
-                <Text style={styles.errorText}>{errorMessage}</Text>
+              {/* 當 passwordError 有內容時，在密碼輸入框下方顯示紅字 */}
+              {passwordError ? (
+                <Text style={styles.errorText}>{passwordError}</Text>
               ) : null}
             </View>
 
@@ -217,7 +236,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
-    position: 'relative', // 確保提示字位置穩定
+    position: 'relative', 
   },
   label: {
     fontSize: 14,
@@ -235,7 +254,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#33373E',
   },
-  // 💡 新增紅色錯誤文字的樣式
   errorText: {
     color: '#FF6B6B', 
     fontSize: 14,
