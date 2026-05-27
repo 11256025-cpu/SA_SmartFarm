@@ -3,7 +3,7 @@ import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
@@ -201,24 +201,22 @@ export default function AlertsScreen() {
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>最近警示紀錄</Text>
-            <TouchableOpacity onPress={handleClearLogs}>
+            <TouchableOpacity onPress={() => setAlertLogs([])}>
               <FontAwesome name="trash-o" size={18} color={colors.muted} />
             </TouchableOpacity>
           </View>
-          {/* 💡 將紀錄列表包在 ScrollView 中，避免內容過多時卡住或破版 */}
-          <ScrollView style={styles.logContainer} showsVerticalScrollIndicator={false}>
-            {alertLogs.length > 0 ? alertLogs.map((log) => (
-              <View key={log.log_id} style={styles.logItem}>
-                <View style={styles.logIcon}>
-                  <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.logMsg}>{log.message}</Text>
-                  <Text style={styles.logTime}>{log.record_time}</Text>
-                </View>
+          {alertLogs.map((log) => (
+            <View key={log.id} style={styles.logItem}>
+              <View style={styles.logIcon}>
+                <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
               </View>
-            )) : <Text style={styles.emptyText}>暫無警示紀錄。</Text>}
-          </ScrollView>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.logMsg}>{log.msg}</Text>
+                <Text style={styles.logTime}>{log.date} {log.time}</Text>
+              </View>
+            </View>
+          ))}
+          {alertLogs.length === 0 && <Text style={styles.emptyText}>暫無警示紀錄。</Text>}
         </>
       )}
       right={(
@@ -250,10 +248,6 @@ const styles = StyleSheet.create({
   mainLayout: { flex: 1, flexDirection: 'row', padding: spacing.xl, gap: 25 },
   contentRow: { flexDirection: 'row', gap: 30, width: '100%' },
   logSection: { width: '38%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
-  logContainer: {
-    flex: 1, // 💡 讓滾動區域填滿剩餘空間
-    marginTop: 4,
-  },
   settingSection: { width: '62%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { color: colors.text, fontSize: 20, fontWeight: 'bold' },

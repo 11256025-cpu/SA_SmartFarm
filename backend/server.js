@@ -116,7 +116,14 @@ setInterval(() => {
 
             const checkAndAlert = (type, value, rangeStr, unit) => {
                 if (!rangeStr) return;
-                const range = JSON.parse(rangeStr);
+                
+                let range;
+                try {
+                    range = JSON.parse(rangeStr);
+                } catch (e) {
+                    range = rangeStr.split(',').map(Number); // 相容先前的純逗號字串格式
+                }
+                
                 if (value < range[0] || value > range[1]) {
                     const alertKey = `${uid}_${type}`;
                     const now = Date.now();
@@ -245,8 +252,70 @@ app.post('/api/login', (req, res) => {
     });
 });
 
-const alertRoutes = require('./routes/alerts');
-app.use('/api/alerts', alertRoutes);
+app.post('/api/alerts/settings', (req, res) => {
+    const { userId, tempRange, humidRange, co2Range, lightRange } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少使用者 ID" });
+    const tempStr = JSON.stringify(tempRange);
+    const soilStr = JSON.stringify(humidRange);
+    const co2Str = JSON.stringify(co2Range);
+    const lightStr = JSON.stringify(lightRange);
+    const checkSql = `SELECT * FROM WARNING_RANGE WHERE user_id = ?`;
+    db.get(checkSql, [userId], (err, row) => {
+        if (row) {
+            const updateSql = `UPDATE WARNING_RANGE SET temp_warning = ?, soil_warning = ?, co2_warning = ?, light_warning = ? WHERE user_id = ?`;
+            db.run(updateSql, [tempStr, soilStr, co2Str, lightStr, userId], () => res.json({ success: true, message: "設定更新成功！" }));
+        } else {
+            const insertSql = `INSERT INTO WARNING_RANGE (user_id, temp_warning, soil_warning, co2_warning, light_warning) VALUES (?, ?, ?, ?, ?)`;
+            db.run(insertSql, [userId, tempStr, soilStr, co2Str, lightStr], () => res.json({ success: true, message: "設定新增成功！" }));
+        }
+    });
+});
+
+app.get('/api/alerts/settings', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [userId], (err, row) => {
+        if (!row) return res.json({ success: true, settings: null });
+        
+        // 防呆解析函數：同時支援 JSON 陣列與逗號字串
+        const safeParse = (str) => {
+            if (!str) return null;
+            try {
+                return JSON.parse(str);
+            } catch (e) {
+                return str.split(',').map(Number);
+            }
+        };
+
+        res.json({
+            success: true,
+            settings: {
+                tempRange: safeParse(row.temp_warning),
+                humidRange: safeParse(row.soil_warning),
+                co2Range: safeParse(row.co2_warning),
+                lightRange: safeParse(row.light_warning) || [500, 50000]
+            }
+        });
+    });
+});
+
+app.post('/api/alerts/logs', (req, res) => {
+    const { userId, message } = req.body;
+    if (!userId || !message) return res.status(400).json({ success: false, message: "缺少必要參數" });
+    db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [userId, message], function(err) {
+        if (err) return res.status(500).json({ success: false, message: "新增紀錄失敗" });
+        res.json({ success: true, message: "新增紀錄成功", id: this.lastID });
+    });
+});
+
+app.get('/api/alerts/logs', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    db.all(`SELECT log_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: "查詢紀錄失敗" });
+        res.json({ success: true, logs: rows || [] });
+    });
+});
 
 app.post('/api/schedule', (req, res) => {
     const { userId, frequency, duration } = req.body;

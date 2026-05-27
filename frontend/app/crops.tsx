@@ -381,7 +381,7 @@ export default function CropsScreen() {
 
               {/* 照片上傳 */}
               <View style={styles.fieldGroup}>
-                <Text style={styles.fieldLabel}>作物實體外觀照片</Text>
+                <Text style={styles.fieldLabel}>作物照片</Text>
                 <TouchableOpacity style={styles.photoUploadDashedBox} onPress={handlePickImage} activeOpacity={0.8}>
                   {uploadedImageUri ? (
                     <Image source={{ uri: uploadedImageUri }} style={styles.uploadedImagePreview} />
