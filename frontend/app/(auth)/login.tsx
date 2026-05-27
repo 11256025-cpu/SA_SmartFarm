@@ -3,20 +3,24 @@ import { router } from 'expo-router';
 import React, { useRef, useState } from 'react'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// 💡 引入 FontAwesome 來做眼球圖標
+import { FontAwesome } from '@expo/vector-icons';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   
-  // 💡 分拆錯誤狀態，讓各自的錯誤顯示在各自的輸入框底下
+  // 錯誤狀態提示
   const [accountError, setAccountError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // 建立一個密碼輸入框的錨點 (Ref)
+  // 💡 新增控制密碼是否可見的狀態（預設 false 代表隱藏、呈現星號）
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+
+  // 建立密碼輸入框的錨點
   const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
-    // 每次點擊登入時，先清空所有先前的錯誤訊息
     setAccountError('');
     setPasswordError('');
 
@@ -40,10 +44,8 @@ export default function LoginScreen() {
       const data = await response.json();
 
       if (data.success) {
-        // 取得使用者 id
         const userId = data.user?.user_id ?? data.user?.id ?? null;
 
-        // 將 userId 存到本地
         if (userId) {
           try {
             await AsyncStorage.setItem('userId', String(userId));
@@ -55,7 +57,6 @@ export default function LoginScreen() {
           }
         }
 
-        // 嘗試向後端查詢該使用者上次儲存的警示設定
         if (userId) {
           try {
             const resp = await fetch(`http://localhost:3000/api/alerts/settings?userId=${userId}`);
@@ -77,12 +78,9 @@ export default function LoginScreen() {
           alert('✅ 登入成功！');
         }
 
-        // 導向主畫面
         router.replace('/environment');
       } else {
         const msg = data.message || '';
-        
-        // 💡 根據後端錯誤訊息內容，把錯誤指定到對應的欄位狀態上
         if (
           msg.includes('查無') || 
           msg.includes('不存在') || 
@@ -90,9 +88,9 @@ export default function LoginScreen() {
           msg.toLowerCase().includes('not found') ||
           msg.toLowerCase().includes('exist')
         ) {
-          setAccountError("帳號不存在"); // 顯示在帳號框底下
+          setAccountError("此帳號不存在"); 
         } else {
-          setPasswordError("密碼輸入錯誤"); // 顯示在密碼框底下
+          setPasswordError("密碼輸入錯誤"); 
         }
       }
     } catch (error) {
@@ -101,13 +99,11 @@ export default function LoginScreen() {
     }
   };
 
-  // 當使用者重新輸入帳號時，洗掉帳號錯誤訊息
   const handleAccountChange = (text: string) => {
     setAccount(text);
     if (accountError) setAccountError('');
   };
 
-  // 當使用者重新輸入密碼時，洗掉密碼錯誤訊息
   const handlePasswordChange = (text: string) => {
     setPassword(text);
     if (passwordError) setPasswordError('');
@@ -130,6 +126,7 @@ export default function LoginScreen() {
 
           {/* 表單區塊 */}
           <View style={styles.form}>
+            
             {/* 帳號輸入框 */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>帳號</Text>
@@ -144,8 +141,6 @@ export default function LoginScreen() {
                 returnKeyType="next"
                 onSubmitEditing={() => passwordInputRef.current?.focus()}
               />
-              
-              {/* 💡 新增：當 accountError 有內容時，在帳號輸入框下方顯示紅字 */}
               {accountError ? (
                 <Text style={styles.errorText}>{accountError}</Text>
               ) : null}
@@ -154,20 +149,36 @@ export default function LoginScreen() {
             {/* 密碼輸入框 */}
             <View style={styles.inputContainer}>
               <Text style={styles.label}>密碼</Text>
-              <TextInput
-                ref={passwordInputRef} 
-                style={styles.input}
-                placeholder="請輸入您的密碼"
-                placeholderTextColor="#666"
-                value={password}
-                onChangeText={handlePasswordChange} 
-                secureTextEntry
-                autoCapitalize="none"
-                returnKeyType="done"
-                onSubmitEditing={handleLogin}
-              />
               
-              {/* 當 passwordError 有內容時，在密碼輸入框下方顯示紅字 */}
+              {/* 💡 這裡將密碼輸入框與眼球按鈕包在一起，使其方便做相對定位 */}
+              <View style={styles.passwordWrapper}>
+                <TextInput
+                  ref={passwordInputRef} 
+                  style={[styles.input, styles.passwordInputSpecial]} // 額外擴充右邊留白防止文字跟眼球重疊
+                  placeholder="請輸入您的密碼"
+                  placeholderTextColor="#666"
+                  value={password}
+                  onChangeText={handlePasswordChange} 
+                  secureTextEntry={!isPasswordVisible} // 💡 動態切換顯示或隱藏
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                  onSubmitEditing={handleLogin}
+                />
+                
+                {/* 💡 核心新增：顯示/隱藏密碼的眼球圖標按鈕 */}
+                <TouchableOpacity 
+                  style={styles.eyeIconContainer} 
+                  onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  activeOpacity={0.6}
+                >
+                  <FontAwesome 
+                    name={isPasswordVisible ? "eye" : "eye-slash"} 
+                    size={20} 
+                    color="#999999" 
+                  />
+                </TouchableOpacity>
+              </View>
+              
               {passwordError ? (
                 <Text style={styles.errorText}>{passwordError}</Text>
               ) : null}
@@ -236,13 +247,19 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
-    position: 'relative', 
   },
   label: {
     fontSize: 14,
     color: '#DDDDDD',
     marginBottom: 8,
     fontWeight: '600',
+  },
+  // 💡 新增：包裹密碼輸入框與眼球的容器
+  passwordWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    position: 'relative',
+    width: '100%',
   },
   input: {
     backgroundColor: '#22252A',
@@ -253,6 +270,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     borderWidth: 1,
     borderColor: '#33373E',
+    width: '100%',
+  },
+  // 💡 新增：密碼輸入框右側多預留一點寬度，避免輸入很長時字體穿透到眼球底下
+  passwordInputSpecial: {
+    paddingRight: 50, 
+  },
+  // 💡 新增：眼球按鈕的定位控制（靠右居中）
+  eyeIconContainer: {
+    position: 'absolute',
+    right: 16,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 4, 
   },
   errorText: {
     color: '#FF6B6B', 
