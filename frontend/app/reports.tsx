@@ -1,9 +1,9 @@
 import { FontAwesome } from '@expo/vector-icons';
-import React, { useState, useEffect } from 'react';
-import { Dimensions, LayoutChangeEvent, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
-import { Calendar } from 'react-native-calendars';
-import { LineChart, BarChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { useEffect, useState } from 'react';
+import { Dimensions, LayoutChangeEvent, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Calendar } from 'react-native-calendars';
+import { BarChart, LineChart } from 'react-native-chart-kit';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
@@ -22,8 +22,7 @@ export default function ReportsScreen() {
   const [startDate, setStartDate] = useState<string>(todayStr);
   const [endDate, setEndDate] = useState<string>('');
   
-  // 💡 預設勾選增加 'growth' 與 'harvest'
-  const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2', 'growth', 'harvest']);
+  const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2']);
   const [chartWidth, setChartWidth] = useState<number>(Dimensions.get('window').width * 0.5);
 
   const [dbChartData, setDbChartData] = useState<{
@@ -32,9 +31,7 @@ export default function ReportsScreen() {
     humid: number[];
     light: number[];
     co2: number[];
-    growth: number[];  // 🌱 生長數據
-    harvest: number[]; // 🧺 收成數據
-  }>({ labels: [], temp: [], humid: [], light: [], co2: [], growth: [], harvest: [] });
+  }>({ labels: [], temp: [], humid: [], light: [], co2: [] });
 
   const fetchHistoryData = async () => {
     try {
@@ -71,18 +68,13 @@ export default function ReportsScreen() {
         const light = records.map(r => Number(r.light) || 0);
         const co2 = records.map(r => Number(r.co2) || 0);
 
-        // 💡 模擬生長與收成數據（若後端未來有相應欄位，可直接替換成 r.growth 或 r.harvest）
-        // 這裡建立與 records 長度相同的動態模擬趨勢，確保畫面漂亮
-        const growth = records.map((_, index) => Math.round(15 + (index * (35 / totalRecords)) + Math.random() * 2));
-        const harvest = records.map((_, index) => index % 3 === 0 ? Math.round(50 + Math.random() * 40) : 0);
-
-        setDbChartData({ labels, temp, humid, light, co2, growth, harvest });
+        setDbChartData({ labels, temp, humid, light, co2 });
       } else {
-        setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [], growth: [], harvest: [] });
+        setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [] });
       }
     } catch (error) {
       console.error('❌ 前端抓取歷史報表失敗:', error);
-      setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [], growth: [], harvest: [] });
+      setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [] });
     }
   };
 
@@ -139,8 +131,6 @@ export default function ReportsScreen() {
     { key: 'humid', label: '土壤濕度圖 (%)', color: '#4C84FF', type: 'line' },
     { key: 'light', label: '光照強度圖 (lux)', color: '#F39C12', type: 'line' },
     { key: 'co2', label: '二氧化碳濃度 (ppm)', color: '#9B59B6', type: 'line' },
-    { key: 'growth', label: '作物生長進度 (cm)', color: '#2ECC71', type: 'line' },   // 🌱 新增
-    { key: 'harvest', label: '作物收成量紀錄 (kg)', color: '#1ABC9C', type: 'bar' }, // 🧺 新增
   ];
 
   const onRightPanelLayout = (event: LayoutChangeEvent) => {

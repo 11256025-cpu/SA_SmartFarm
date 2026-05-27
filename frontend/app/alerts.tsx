@@ -3,7 +3,7 @@ import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
@@ -78,6 +78,39 @@ export default function AlertsScreen() {
       loadAlertLogs();
     }, [])
   );
+
+  // 💡 新增：清空警示紀錄的功能，並連接到後端資料庫
+  const handleClearLogs = async () => {
+    // 跳出再次確認的對話框，防止誤觸
+    Alert.alert(
+      "確認清空紀錄",
+      "此操作將會永久刪除所有警示紀錄，且無法復原。確定要繼續嗎？",
+      [
+        { text: "取消", style: "cancel" },
+        {
+          text: "確定清空",
+          style: 'destructive', // 在 iOS 上會顯示為紅色按鈕
+          onPress: async () => {
+            try {
+              const uid = await AsyncStorage.getItem('userId') || '1';
+              // 假設後端有 DELETE /api/alerts/logs?userId=... 的 API
+              const response = await fetch(`${BASE_URL}/api/alerts/logs?userId=${uid}`, {
+                method: 'DELETE',
+              });
+
+              const data = await response.json();
+              if (data.success) {
+                setAlertLogs([]); // 同步清空前端狀態
+                // alert('✅ 所有警示紀錄已成功清空！'); // 也可以選擇不跳通知，讓使用者感覺更流暢
+              } else {
+                alert(`❌ 清空失敗：${data.message || '請稍後再試'}`);
+              }
+            } catch (error) { console.error('清空警示紀錄時發生錯誤:', error); alert('⚠️ 無法連線到伺服器。'); }
+          },
+        },
+      ]
+    );
+  };
 
   // 4. 渲染「左右包夾」的範圍設定滑軌元件
   const renderRangeSetting = (label, values, setter, min, max, unit, step = 1) => (
@@ -168,22 +201,24 @@ export default function AlertsScreen() {
         <>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>最近警示紀錄</Text>
-            <TouchableOpacity onPress={() => setAlertLogs([])}>
+            <TouchableOpacity onPress={handleClearLogs}>
               <FontAwesome name="trash-o" size={18} color={colors.muted} />
             </TouchableOpacity>
           </View>
-          {alertLogs.map((log) => (
-            <View key={log.id} style={styles.logItem}>
-              <View style={styles.logIcon}>
-                <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
+          {/* 💡 將紀錄列表包在 ScrollView 中，避免內容過多時卡住或破版 */}
+          <ScrollView style={styles.logContainer} showsVerticalScrollIndicator={false}>
+            {alertLogs.length > 0 ? alertLogs.map((log) => (
+              <View key={log.log_id} style={styles.logItem}>
+                <View style={styles.logIcon}>
+                  <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.logMsg}>{log.message}</Text>
+                  <Text style={styles.logTime}>{log.record_time}</Text>
+                </View>
               </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.logMsg}>{log.msg}</Text>
-                <Text style={styles.logTime}>{log.date} {log.time}</Text>
-              </View>
-            </View>
-          ))}
-          {alertLogs.length === 0 && <Text style={styles.emptyText}>暫無警示紀錄。</Text>}
+            )) : <Text style={styles.emptyText}>暫無警示紀錄。</Text>}
+          </ScrollView>
         </>
       )}
       right={(
@@ -215,6 +250,10 @@ const styles = StyleSheet.create({
   mainLayout: { flex: 1, flexDirection: 'row', padding: spacing.xl, gap: 25 },
   contentRow: { flexDirection: 'row', gap: 30, width: '100%' },
   logSection: { width: '38%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
+  logContainer: {
+    flex: 1, // 💡 讓滾動區域填滿剩餘空間
+    marginTop: 4,
+  },
   settingSection: { width: '62%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { color: colors.text, fontSize: 20, fontWeight: 'bold' },

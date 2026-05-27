@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useState } from 'react';
-import { Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -10,11 +10,21 @@ import { colors, radii, spacing, typography } from '../components/sharedStyles';
 // 💡 自動判斷執行環境，避免 localhost 在實機上連不到
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
+// 💡 時間格式化工具 (產出如：2026/05/27 21:35)
+const formatDateTime = (dateString: string) => {
+  if (!dateString) return '';
+  const d = new Date(dateString);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const hours = String(d.getHours()).padStart(2, '0');
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  return `${year}/${month}/${day} ${hours}:${minutes}`;
+};
+
 export default function CropsScreen() {
   // === 狀態管理 ===
-  const [crops, setCrops] = useState([
-    
-  ]);
+  const [crops, setCrops] = useState<any[]>([]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
 
@@ -54,7 +64,8 @@ export default function CropsScreen() {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [4, 3],
+      aspect: [1, 1],
+      // 💡 移除了 aspect 限制，現在您可以自由拖曳裁切框的邊角，決定要裁切的形狀與位置！
       quality: 0.3, // 降低畫質避免 base64 字串過大
       base64: true, // 💡 關鍵：要求直接將圖片轉成 Base64 編碼的文字格式
     });
@@ -106,12 +117,31 @@ export default function CropsScreen() {
     try {
       let uid = await AsyncStorage.getItem('userId') || '1';
       
+      const currentCrop = editingCropId ? crops.find(c => c.id === editingCropId) : null;
+      let currentHistory = currentCrop?.history || [];
+      
+      const newStage = cropStage || '幼苗期';
+      const newStatus = cropStatus || '良好';
+      
+      // 💡 判斷是否需要新增歷史紀錄 (新增作物，或者作物的階段/狀態有被更改)
+      if (!editingCropId || currentCrop?.stage !== newStage || currentCrop?.status !== newStatus) {
+        currentHistory = [
+          ...currentHistory,
+          {
+            timestamp: new Date().toISOString(),
+            stage: newStage,
+            status: newStatus
+          }
+        ];
+      }
+
       const payload = {
         userId: Number(uid),
         name: cropName,
-        stage: cropStage || '幼苗期',
-        status: cropStatus || '良好',
+        stage: newStage,
+        status: newStatus,
         image: uploadedImageUri,
+        history: currentHistory, // 💡 一併傳送歷史紀錄陣列給後端存入資料庫
       };
 
       const isEditing = editingCropId !== null;
@@ -145,6 +175,51 @@ export default function CropsScreen() {
       console.error('儲存作物時發生錯誤:', error);
       alert('⚠️ 無法連線到伺服器，請確認後端服務已啟動。');
     }
+  };
+
+  // 💡 新增：清空歷史紀錄
+  const handleClearHistory = async () => {
+    if (!editingCropId) return;
+
+    // 跳出再次確認的對話框，防止誤觸
+    Alert.alert(
+      "確認清空紀錄",
+      "此操作將會永久刪除該作物所有的狀態變更歷史，且無法復原。確定要繼續嗎？",
+      [
+        { text: "取消", style: "cancel" },
+        {
+          text: "確定清空",
+          style: 'destructive', // 在 iOS 上會顯示為紅色按鈕
+          onPress: async () => {
+            try {
+              const cropToUpdate = crops.find(c => c.id === editingCropId);
+              if (!cropToUpdate) {
+                alert('找不到要更新的作物。');
+                return;
+              }
+
+              // 準備一個 history 為空陣列的 payload
+              const payload = { ...cropToUpdate, history: [] };
+
+              const response = await fetch(`${BASE_URL}/api/crops/${editingCropId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+              });
+
+              const data = await response.json();
+              if (data.success) {
+                alert('✅ 歷史紀錄已成功清空！');
+                // 直接更新前端狀態，讓畫面同步刷新
+                setCrops(crops.map(c => (c.id === editingCropId ? { ...c, history: [] } : c)));
+              } else {
+                alert(`❌ 清空失敗：${data.message || '請稍後再試'}`);
+              }
+            } catch (error) { console.error('清空歷史紀錄時發生錯誤:', error); alert('⚠️ 無法連線到伺服器。'); }
+          },
+        },
+      ]
+    );
   };
 
   // 💡 刪除作物
@@ -187,28 +262,50 @@ export default function CropsScreen() {
       {/* 作物卡片網格 */}
       <ScrollView contentContainerStyle={styles.cardGridContainer} showsVerticalScrollIndicator={false}>
         {crops.map((item) => (
-          <TouchableOpacity key={item.id} style={styles.cropCard} activeOpacity={0.8} onPress={() => handleEditCrop(item)}>
-            {/* 💡 將 View 改為 TouchableOpacity，並綁定點擊事件 */}
-            <View style={styles.cardImageLayer}>
-              {item.image ? (
-                <Image source={{ uri: item.image }} style={styles.cardRealRenderImage} />
-              ) : (
-                <View style={styles.cardIllustrationPlaceholder}>
-                  <FontAwesome name="leaf" size={36} color={colors.primary} />
-                </View>
-              )}
-            </View>
+          <View key={item.id} style={styles.cropCard}>
+            {/* 💡 將卡片改為 View，把點擊事件限制在照片與資料區塊，避免滑動時誤觸 */}
+            <TouchableOpacity activeOpacity={0.8} onPress={() => handleEditCrop(item)}>
+              <View style={styles.cardImageLayer}>
+                {item.image ? (
+                  <Image source={{ uri: item.image }} style={styles.cardRealRenderImage} />
+                ) : (
+                  <View style={styles.cardIllustrationPlaceholder}>
+                    <FontAwesome name="leaf" size={36} color={colors.primary} />
+                  </View>
+                )}
+              </View>
 
-            <View style={styles.cardDataLayer}>
-              <Text style={styles.cardCropNameTitle} numberOfLines={1}>{item.name}</Text>
-              <Text style={styles.cardCropMetaText} numberOfLines={1}>作物階段：{item.stage}</Text>
-              <Text style={styles.cardCropMetaText} numberOfLines={1}>作物狀態：{item.status}</Text>
-            </View>
+              <View style={styles.cardDataLayer}>
+                <Text style={styles.cardCropNameTitle} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.cardCropMetaText} numberOfLines={1}>作物階段：{item.stage}</Text>
+                <Text style={styles.cardCropMetaText} numberOfLines={1}>作物狀態：{item.status}</Text>
+              </View>
+            </TouchableOpacity>
 
-            <View style={styles.heartPulseBadge}>
-              <FontAwesome name="heartbeat" size={11} color={colors.text} />
+            {/* 💡 新增：歷史紀錄區塊 */}
+            <View style={styles.cardHistoryContainer}>
+              <View style={styles.historyHeader}>
+                <Text style={styles.historyTitle}>
+                  狀態變更紀錄 {item.history?.length > 0 ? `(${item.history.length})` : ''}
+                </Text>
+                {item.history?.length > 2 && (
+                  <FontAwesome name="angle-double-down" size={16} color={colors.subMuted} style={{ opacity: 0.6 }} />
+                )}
+              </View>
+              {/* 💡 將歷史紀錄包裹在 ScrollView 中，並開啟 nestedScrollEnabled */}
+              <ScrollView style={styles.historyScrollArea} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
+                {item.history && item.history.length > 0 ? (
+                  [...item.history].reverse().map((h: any, idx: number) => (
+                    <Text key={idx} style={styles.historyText}>
+                      {formatDateTime(h.timestamp)} {h.stage} {h.status}
+                    </Text>
+                  ))
+                ) : (
+                  <Text style={styles.historyText}>暫無紀錄</Text>
+                )}
+              </ScrollView>
             </View>
-          </TouchableOpacity>
+          </View>
         ))}
 
         {/* 虛線新增按鈕卡片 (保留作為第二個新增入口) */}
@@ -300,11 +397,16 @@ export default function CropsScreen() {
 
             {/* 彈窗按鈕區 */}
             <View style={styles.modalFooter}>
-              {/* 💡 編輯模式時，顯示刪除按鈕 */}
+              {/* 💡 編輯模式時，顯示刪除與清空按鈕 */}
               {editingCropId && (
-                <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteCrop}>
-                  <Text style={styles.deleteBtnText}>刪除</Text>
-                </TouchableOpacity>
+                <>
+                  <TouchableOpacity style={styles.deleteBtn} onPress={handleDeleteCrop}>
+                    <Text style={styles.deleteBtnText}>刪除作物</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.clearHistoryBtn} onPress={handleClearHistory}>
+                    <Text style={styles.clearHistoryBtnText}>清空紀錄</Text>
+                  </TouchableOpacity>
+                </>
               )}
               <View style={{ flex: 1 }} />
               <TouchableOpacity style={styles.cancelBtn} onPress={handleCloseModal}>
@@ -358,17 +460,23 @@ const styles = StyleSheet.create({
   saveBtnText: { color: colors.text, fontSize: typography.body, fontWeight: 'bold' },
   deleteBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md, backgroundColor: 'rgba(240, 110, 110, 0.1)' },
   deleteBtnText: { color: colors.alert, fontSize: typography.body, fontWeight: 'bold' },
+  clearHistoryBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md, backgroundColor: 'rgba(243, 156, 18, 0.1)' },
+  clearHistoryBtnText: { color: '#F39C12', fontSize: typography.body, fontWeight: 'bold' },
 
   // 作物列表卡片樣式
   cardGridContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, paddingHorizontal: spacing.xl, paddingBottom: 60 },
-  cropCard: { width: '31%', minWidth: 220, height: 275, backgroundColor: colors.card, borderRadius: radii.lg, padding: 14, borderWidth: 1, borderColor: colors.border, position: 'relative', overflow: 'hidden' },
-  cardImageLayer: { height: 130, borderRadius: radii.md, overflow: 'hidden', marginBottom: 14 },
+  cropCard: { width: '48%', minWidth: 280, minHeight: 475, backgroundColor: colors.card, borderRadius: radii.lg, padding: 18, borderWidth: 1, borderColor: colors.border, position: 'relative', overflow: 'hidden', paddingBottom: 20, flexDirection: 'column' },
+  cardImageLayer: { height: 240, borderRadius: radii.md, overflow: 'hidden', marginBottom: 16 },
   cardRealRenderImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   cardIllustrationPlaceholder: { backgroundColor: colors.border, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' },
   cardDataLayer: { gap: 6 },
-  cardCropNameTitle: { color: colors.text, fontSize: typography.large, fontWeight: 'bold', marginBottom: 4 },
-  cardCropMetaText: { color: colors.muted, fontSize: typography.body },
-  heartPulseBadge: { position: 'absolute', bottom: 16, right: 16, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', shadowColor: colors.primary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.4, shadowRadius: 4 },
-  dashedActionCard: { width: '31%', minWidth: 220, height: 275, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
-  dashedActionText: { color: colors.muted, fontSize: typography.body, fontWeight: 'bold' }
+  cardCropNameTitle: { color: colors.text, fontSize: 24, fontWeight: 'bold', marginBottom: 6 },
+  cardCropMetaText: { color: colors.muted, fontSize: 16, marginBottom: 2 },
+  cardHistoryContainer: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  historyTitle: { color: colors.muted, fontSize: 16, fontWeight: 'bold' },
+  historyScrollArea: { height: 65, paddingRight: 4 },
+  historyText: { color: colors.subMuted, fontSize: 14, marginBottom: 6, lineHeight: 20 },
+  dashedActionCard: { width: '48%', minWidth: 280, minHeight: 475, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
+  dashedActionText: { color: colors.muted, fontSize: 18, fontWeight: 'bold' }
 });

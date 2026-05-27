@@ -21,7 +21,13 @@ router.get('/', (req, res) => {
             console.error('取得作物失敗:', err);
             return res.status(500).json({ success: false, message: '資料庫讀取失敗' });
         }
-        res.json({ success: true, crops: rows });
+        
+        // 💡 讀取時，將資料庫中的字串解開回陣列
+        const formattedRows = rows.map(row => ({
+            ...row,
+            history: row.history ? JSON.parse(row.history) : []
+        }));
+        res.json({ success: true, crops: formattedRows });
     });
 });
 
@@ -29,14 +35,17 @@ router.get('/', (req, res) => {
 // 2. 新增作物 (POST /api/crops)
 // ==========================================
 router.post('/', (req, res) => {
-    const { userId, name, stage, status, image } = req.body;
+    const { userId, name, stage, status, image, history } = req.body;
 
     if (!userId || !name) {
         return res.status(400).json({ success: false, message: '缺少必要欄位 (userId, name)' });
     }
 
-    const sql = `INSERT INTO crops (userId, name, stage, status, image) VALUES (?, ?, ?, ?, ?)`;
-    db.run(sql, [userId, name, stage, status, image], function(err) {
+    // 💡 將陣列轉換成字串再存入資料庫
+    const historyStr = JSON.stringify(history || []);
+
+    const sql = `INSERT INTO crops (userId, name, stage, status, image, history) VALUES (?, ?, ?, ?, ?, ?)`;
+    db.run(sql, [userId, name, stage, status, image, historyStr], function(err) {
         if (err) {
             console.error('新增作物失敗:', err);
             return res.status(500).json({ success: false, message: '資料庫寫入失敗' });
@@ -52,14 +61,17 @@ router.post('/', (req, res) => {
 // ==========================================
 router.put('/:id', (req, res) => {
     const cropId = req.params.id;
-    const { name, stage, status, image } = req.body;
+    const { name, stage, status, image, history } = req.body;
 
     if (!name) {
         return res.status(400).json({ success: false, message: '缺少必要欄位 (name)' });
     }
 
-    const sql = `UPDATE crops SET name = ?, stage = ?, status = ?, image = ? WHERE id = ?`;
-    db.run(sql, [name, stage, status, image, cropId], function(err) {
+    // 💡 將陣列轉換成字串再存入資料庫
+    const historyStr = JSON.stringify(history || []);
+
+    const sql = `UPDATE crops SET name = ?, stage = ?, status = ?, image = ?, history = ? WHERE id = ?`;
+    db.run(sql, [name, stage, status, image, historyStr, cropId], function(err) {
         if (err) {
             console.error('更新作物失敗:', err);
             return res.status(500).json({ success: false, message: '資料庫寫入失敗' });

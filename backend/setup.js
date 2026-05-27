@@ -12,78 +12,65 @@ const db = new sqlite3.Database('./farm.db', (err) => {
 db.serialize(() => {
     // 1. 建立 USER 表格 (使用者資訊)
     db.run(`CREATE TABLE IF NOT EXISTS USER (
-        user_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         nickname TEXT NOT NULL,
         account TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         avatar TEXT
     )`);
 
-    // 3. 建立 IRRIGATION 表格 (灌溉設定)
-    db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION (
-        irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        irrigation_freq TEXT,
-        irrigation_duration INTEGER,
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
-    )`);
-
-    // 4. 建立 WARNING_RANGE 表格 (警示範圍)
+    // 2. 建立 WARNING_RANGE 表格 (警示範圍 - 每個使用者只需一筆設定，所以用 user_id 當主鍵)
     db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
-        warning_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
+        user_id TEXT PRIMARY KEY,
         temp_warning TEXT,
         soil_warning TEXT,
         co2_warning TEXT,
-        light_warning TEXT, -- 💡 補上先前新增的 light_warning
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+        light_warning TEXT
     )`);
 
-    // 4.5 建立 ALERT_LOGS 表格 (警示紀錄)
+    // 3. 建立 ALERT_LOGS 表格 (警示紀錄)
     db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
         log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
+        user_id TEXT,
         message TEXT,
-        record_time DATETIME DEFAULT (datetime('now', '+8 hours')),
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+        record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
     )`);
 
-    // 5. 建立 HISTORY 表格 (歷史紀錄)
-    // 💡 修正：將時間預設值改為 台灣時區 (+8小時)，確保圖表時間軸正確
+    // 4. 建立 HISTORY 表格 (歷史數據)
     db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
-        record_id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER,
-        record_time DATETIME DEFAULT (datetime('now', '+8 hours')), 
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
         history_temp REAL,
         history_soil_moisture REAL,
         history_light REAL,
         history_co2 REAL,
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+        record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
     )`);
 
-    // 6. 建立 schedule_settings 表格 (自動灌溉排程設定)
-    // 💡 修正：補上 user_id 與外鍵，防止所有使用者的排程混在一起
+    // 5. 建立 schedule_settings 表格 (自動灌溉排程 - 刪除了重複的 IRRIGATION 表，統一用這個)
     db.run(`CREATE TABLE IF NOT EXISTS schedule_settings (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER, -- 👈 新增：區分是誰的排程設定
-        frequency INTEGER NOT NULL,
-        duration INTEGER NOT NULL,
-        updated_at DATETIME DEFAULT (datetime('now', '+8 hours')), -- 💡 同步修正為台灣時區
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+        user_id TEXT PRIMARY KEY,
+        frequency TEXT,
+        duration TEXT,
+        updated_at DATETIME DEFAULT (datetime('now', '+8 hours'))
     )`);
 
-    // 7. 建立 crops 表格 (作物資料)
-    // 💡 修正：將 userId 改為 user_id，保持資料庫命名欄位一致性
+    // 6. 建立 crops 表格 (作物資料)
+    // 💡 新增了 history 欄位，用來儲存作物的「狀態變更紀錄 (JSON 字串)」
     db.run(`CREATE TABLE IF NOT EXISTS crops (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL, -- 👈 修正欄位名稱
+        userId TEXT NOT NULL,
         name TEXT NOT NULL,
         stage TEXT,
         status TEXT,
         image TEXT,
-        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+        history TEXT
     )`, () => {
-        console.log("✅ 所有資料表建立完成且已完成使用者隔離綁定！");
-        db.close();
+        // 💡 嘗試為舊有的 crops 表格補上 history 欄位
+        db.run(`ALTER TABLE crops ADD COLUMN history TEXT`, (err) => {
+            // 如果 err 存在，通常是因為欄位已經存在，可以直接忽略
+            console.log("✅ 所有資料表建立與優化完成 (已為舊表補上 history 欄位)！");
+            db.close();
+        });
     });
 });
