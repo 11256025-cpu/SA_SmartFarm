@@ -27,6 +27,8 @@ const db = new sqlite3.Database('./farm.db', (err) => {
 // ==========================================
 // 💡 背景自動寫入機制 (每 10 秒自動紀錄)
 // ==========================================
+let lastAlertTimes = {}; // 紀錄各類警報最後發送時間，避免洗版 { "1_temp": timestamp }
+
 setInterval(() => {
     const userIds = Object.keys(currentFarmStates);
 
@@ -35,7 +37,7 @@ setInterval(() => {
     userIds.forEach((uid) => {
         const state = currentFarmStates[uid];
         
-        // 💡 這裡已修正：將 history_soil 改為 history_soil_moisture 以符合實體資料庫結構
+        // 💡 寫入歷史數據
         const sql = `
             INSERT INTO HISTORY (user_id, history_temp, history_soil_moisture, history_light, history_co2, record_time) 
             VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))
@@ -53,6 +55,32 @@ setInterval(() => {
             } else {
                 console.log(`🕒 [定時紀錄] 成功幫使用者 ${uid} 寫入歷史數據:`, state);
             }
+        });
+
+        // 💡 檢查警示設定並產生紀錄
+        db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [uid], (err, row) => {
+            if (err || !row) return;
+
+            const checkAndAlert = (type, value, rangeStr, unit) => {
+                if (!rangeStr) return;
+                const range = JSON.parse(rangeStr);
+                if (value < range[0] || value > range[1]) {
+                    const alertKey = `${uid}_${type}`;
+                    const now = Date.now();
+                    // 60秒內不重複發送同類型警報
+                    if (!lastAlertTimes[alertKey] || now - lastAlertTimes[alertKey] > 60000) {
+                        const msg = `⚠️ ${type}異常！當前數值 ${value}${unit} (允許範圍: ${range[0]}~${range[1]})`;
+                        db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [uid, msg]);
+                        lastAlertTimes[alertKey] = now;
+                        console.log(`🚨 [警示觸發] ${msg}`);
+                    }
+                }
+            };
+
+            checkAndAlert('環境溫度', state.temperature, row.temp_warning, '°C');
+            checkAndAlert('土壤濕度', state.humidity, row.soil_warning, '%');
+            checkAndAlert('二氧化碳', state.co2, row.co2_warning, 'ppm');
+            checkAndAlert('光照強度', state.light, row.light_warning, 'lux');
         });
     });
 }, 10000); 
@@ -197,6 +225,24 @@ app.get('/api/alerts/settings', (req, res) => {
                 lightRange: row.light_warning ? JSON.parse(row.light_warning) : [500, 50000]
             }
         });
+    });
+});
+
+app.post('/api/alerts/logs', (req, res) => {
+    const { userId, message } = req.body;
+    if (!userId || !message) return res.status(400).json({ success: false, message: "缺少必要參數" });
+    db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [userId, message], function(err) {
+        if (err) return res.status(500).json({ success: false, message: "新增紀錄失敗" });
+        res.json({ success: true, message: "新增紀錄成功", id: this.lastID });
+    });
+});
+
+app.get('/api/alerts/logs', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    db.all(`SELECT log_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: "查詢紀錄失敗" });
+        res.json({ success: true, logs: rows || [] });
     });
 });
 

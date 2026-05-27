@@ -1,8 +1,9 @@
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
@@ -56,13 +57,27 @@ export default function AlertsScreen() {
     loadSettings();
   }, []);
 
-  // 3. 模擬警示紀錄數據 
-  const [alertLogs, setAlertLogs] = useState([
-    { id: 1, type: '濕度', msg: '土壤濕度過低 (25%)', time: '10:30', date: '2024/05/19' },
-    { id: 2, type: '溫度', msg: '環境溫度過高 (38°C)', time: '09:15', date: '2024/05/19' },
-    { id: 3, type: '二氧化碳', msg: '二氧化碳 濃度異常 (1250ppm)', time: '昨天', date: '2024/05/18' },
-    { id: 4, type: '光照', msg: '光照強度過低 (300lux)', time: '前天', date: '2024/05/17' },
-  ]);
+  // 3. 警示紀錄數據狀態 (預設為空陣列)
+  const [alertLogs, setAlertLogs] = useState<any[]>([]);
+
+  // 每次進入頁面時，向後端取得最新的警示紀錄
+  useFocusEffect(
+    useCallback(() => {
+      const loadAlertLogs = async () => {
+        try {
+          let uid = await AsyncStorage.getItem('userId') || '1';
+          const resp = await fetch(`${BASE_URL}/api/alerts/logs?userId=${uid}`);
+          const data = await resp.json();
+          if (data.success && data.logs) {
+            setAlertLogs(data.logs);
+          }
+        } catch (e) {
+          console.warn('❌ 載入警示紀錄失敗：', e);
+        }
+      };
+      loadAlertLogs();
+    }, [])
+  );
 
   // 4. 渲染「左右包夾」的範圍設定滑軌元件
   const renderRangeSetting = (label, values, setter, min, max, unit, step = 1) => (
@@ -168,7 +183,7 @@ export default function AlertsScreen() {
               </View>
             </View>
           ))}
-          {alertLogs.length === 0 && <Text style={styles.emptyText}>太棒了！目前環境一切正常，暫無警示紀錄。</Text>}
+          {alertLogs.length === 0 && <Text style={styles.emptyText}>暫無警示紀錄。</Text>}
         </>
       )}
       right={(
