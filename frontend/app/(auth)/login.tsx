@@ -1,17 +1,22 @@
 // app/(auth)/login.tsx
 import { router } from 'expo-router';
-import React, { useRef, useState } from 'react'; // 💡 這裡幫你引入了 useRef
+import React, { useRef, useState } from 'react'; // 💡 這裡引入了 useRef
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
+  // 💡 新增一個狀態來儲存並顯示紅字錯誤訊息
+  const [errorMessage, setErrorMessage] = useState('');
 
   // 💡 建立一個密碼輸入框的錨點 (Ref)
   const passwordInputRef = useRef<TextInput>(null);
 
   const handleLogin = async () => {
+    // 每次點擊登入時，先清空先前的錯誤訊息
+    setErrorMessage('');
+
     if (!account || !password) {
       alert("請輸入帳號與密碼！");
       return;
@@ -73,12 +78,25 @@ export default function LoginScreen() {
         // 導向主畫面
         router.replace('/environment');
       } else {
-        alert("❌ 登入失敗：" + data.message);
+        // 💡 登入失敗時，不再跳 alert，而是直接將錯誤訊息顯示在畫面上
+        setErrorMessage("密碼輸入錯誤");
       }
     } catch (error) {
       console.error("連線錯誤:", error);
-      alert("無法連線到伺服器，請確認後端已啟動！");
+      setErrorMessage("無法連線到伺服器，請確認後端已啟動！");
     }
+  };
+
+  // 💡 當使用者重新輸入帳號時，順便把錯誤訊息洗掉
+  const handleAccountChange = (text: string) => {
+    setAccount(text);
+    if (errorMessage) setErrorMessage('');
+  };
+
+  // 💡 當使用者重新輸入密碼時，順便把錯誤訊息洗掉
+  const handlePasswordChange = (text: string) => {
+    setPassword(text);
+    if (errorMessage) setErrorMessage('');
   };
 
   return (
@@ -106,11 +124,9 @@ export default function LoginScreen() {
                 placeholder="請輸入您的帳號"
                 placeholderTextColor="#666"
                 value={account}
-                onChangeText={setAccount}
+                onChangeText={handleAccountChange} // 💡 改用有包含清除錯誤邏輯的函式
                 keyboardType="default"
                 autoCapitalize="none"
-                
-                // 💡 加上這兩行：按 Enter 自動跳到密碼欄位
                 returnKeyType="next"
                 onSubmitEditing={() => passwordInputRef.current?.focus()}
               />
@@ -120,19 +136,22 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>密碼</Text>
               <TextInput
-                ref={passwordInputRef} // 💡 綁定錨點
+                ref={passwordInputRef} 
                 style={styles.input}
                 placeholder="請輸入您的密碼"
                 placeholderTextColor="#666"
                 value={password}
-                onChangeText={setPassword}
+                onChangeText={handlePasswordChange} // 💡 改用有包含清除錯誤邏輯的函式
                 secureTextEntry
                 autoCapitalize="none"
-                
-                // 💡 加上這兩行：按 Enter 直接觸發登入
                 returnKeyType="done"
                 onSubmitEditing={handleLogin}
               />
+              
+              {/* 💡 核心新增：當 errorMessage 有內容時，動態渲染紅色錯誤文字 */}
+              {errorMessage ? (
+                <Text style={styles.errorText}>{errorMessage}</Text>
+              ) : null}
             </View>
 
             {/* 登入按鈕 */}
@@ -159,7 +178,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#151718', // 與首頁相同的深色底色
+    backgroundColor: '#151718', 
   },
   scrollContent: {
     flexGrow: 1,
@@ -170,7 +189,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 450,
     alignSelf: 'center',
-    backgroundColor: '#1E2124', // 稍微亮一點的深灰色，營造卡片立體感
+    backgroundColor: '#1E2124', 
     padding: 32,
     borderRadius: 20,
     shadowColor: '#000',
@@ -198,6 +217,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 20,
+    position: 'relative', // 確保提示字位置穩定
   },
   label: {
     fontSize: 14,
@@ -215,8 +235,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#33373E',
   },
+  // 💡 新增紅色錯誤文字的樣式
+  errorText: {
+    color: '#FF6B6B', 
+    fontSize: 14,
+    fontWeight: '500',
+    marginTop: 8,
+    paddingLeft: 4,
+  },
   button: {
-    backgroundColor: '#5A8B73', // 搭配智慧農場的綠色系
+    backgroundColor: '#5A8B73', 
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
