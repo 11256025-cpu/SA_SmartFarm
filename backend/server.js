@@ -21,8 +21,61 @@ const db = new sqlite3.Database('./farm.db', (err) => {
         console.error("資料庫連線失敗:", err.message);
     } else {
         console.log("成功連線到 SQLite 資料庫 (farm.db)！");
+        initializeDatabase(); // 連線成功後，啟動初始化資料表
     }
 });
+
+// 💡 確保所有專案需要的資料表都存在
+function initializeDatabase() {
+    db.serialize(() => {
+        // 1. 建立歷史數據表
+        db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            history_temp REAL,
+            history_soil_moisture REAL,
+            history_light REAL,
+            history_co2 REAL,
+            record_time TEXT
+        )`);
+
+        // 2. 建立警報設定範圍表
+        db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
+            user_id TEXT PRIMARY KEY,
+            temp_warning TEXT,
+            soil_warning TEXT,
+            co2_warning TEXT,
+            light_warning TEXT
+        )`);
+
+        // 3. 建立警報紀錄表 (解決你目前報錯的核心問題)
+        db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            message TEXT,
+            record_time TEXT
+        )`);
+
+        // 4. 建立使用者表 (配合你的 /api/login 和 /api/register)
+        db.run(`CREATE TABLE IF NOT EXISTS USER (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nickname TEXT,
+            account TEXT UNIQUE,
+            password TEXT,
+            avatar TEXT
+        )`);
+
+        // 5. 建立排程設定表
+        db.run(`CREATE TABLE IF NOT EXISTS schedule_settings (
+            user_id TEXT PRIMARY KEY,
+            frequency TEXT,
+            duration TEXT,
+            updated_at TEXT
+        )`);
+
+        console.log("📋 資料庫資料表檢查與初始化完成！");
+    });
+}
 
 // ==========================================
 // 💡 背景自動寫入機制 (每 10 秒自動紀錄)
