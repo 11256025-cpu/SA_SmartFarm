@@ -44,22 +44,28 @@ export default function ReportsScreen() {
       const json = await response.json();
 
       if (json.success && Array.isArray(json.historyData) && json.historyData.length > 0) {
-        const records: DbRecord[] = json.historyData;
+        let records: DbRecord[] = json.historyData;
 
-        // 💡 體驗優化：如果點選單日，10秒一筆會造成 X 軸標籤爆炸。
-        // 我們讓標籤每 6 筆（約1分鐘）或根據總量抽樣顯示，畫面才乾淨。
+        // 💡 解決點點與格線過於密集的關鍵：當資料量大時進行等距抽樣
+        // 將圖表上的資料點限制在最多 15 個，線條與背景網格就會變得非常乾淨、不擁擠
+        const maxDataPoints = 15;
+        if (records.length > maxDataPoints) {
+          const sampleInterval = Math.ceil(records.length / maxDataPoints);
+          records = records.filter((_, index) => index % sampleInterval === 0 || index === records.length - 1);
+        }
+
         const totalRecords = records.length;
-        const labelInterval = Math.ceil(totalRecords / 6); // 最多畫面上顯示 6 個時間點
+        // 畫面上最多顯示 5 個 X 軸時間標籤，避免文字重疊
+        const labelInterval = Math.ceil(totalRecords / 5); 
 
         const labels = records.map((r, index) => {
           if (index === 0 || index === totalRecords - 1 || index % labelInterval === 0) {
             return r.timeStr || '';
           }
-          return ''; // 不顯示的標籤給空字串，套件會自動留空，不會疊在一起
+          return ''; // 不顯示的標籤給空字串，套件會自動留空
         });
 
         const temp = records.map(r => Number(r.temperature) || 0);
-        // 💡 雙重保險：同時相容後端回傳的 humidity
         const humid = records.map(r => Number(r.humidity) || 0);
         const light = records.map(r => Number(r.light) || 0);
         const co2 = records.map(r => Number(r.co2) || 0);
