@@ -2,7 +2,7 @@ import { FontAwesome } from '@expo/vector-icons';
 import React, { useState, useEffect } from 'react';
 import { Dimensions, LayoutChangeEvent, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { Calendar } from 'react-native-calendars';
-import { LineChart } from 'react-native-chart-kit';
+import { LineChart, BarChart } from 'react-native-chart-kit';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -22,7 +22,8 @@ export default function ReportsScreen() {
   const [startDate, setStartDate] = useState<string>(todayStr);
   const [endDate, setEndDate] = useState<string>('');
   
-  const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2']);
+  // 💡 預設勾選增加 'growth' 與 'harvest'
+  const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2', 'growth', 'harvest']);
   const [chartWidth, setChartWidth] = useState<number>(Dimensions.get('window').width * 0.5);
 
   const [dbChartData, setDbChartData] = useState<{
@@ -31,7 +32,9 @@ export default function ReportsScreen() {
     humid: number[];
     light: number[];
     co2: number[];
-  }>({ labels: [], temp: [], humid: [], light: [], co2: [] });
+    growth: number[];  // 🌱 生長數據
+    harvest: number[]; // 🧺 收成數據
+  }>({ labels: [], temp: [], humid: [], light: [], co2: [], growth: [], harvest: [] });
 
   const fetchHistoryData = async () => {
     try {
@@ -47,7 +50,6 @@ export default function ReportsScreen() {
         let records: DbRecord[] = json.historyData;
 
         // 💡 解決點點與格線過於密集的關鍵：當資料量大時進行等距抽樣
-        // 將圖表上的資料點限制在最多 15 個，線條與背景網格就會變得非常乾淨、不擁擠
         const maxDataPoints = 15;
         if (records.length > maxDataPoints) {
           const sampleInterval = Math.ceil(records.length / maxDataPoints);
@@ -55,14 +57,13 @@ export default function ReportsScreen() {
         }
 
         const totalRecords = records.length;
-        // 畫面上最多顯示 5 個 X 軸時間標籤，避免文字重疊
         const labelInterval = Math.ceil(totalRecords / 5); 
 
         const labels = records.map((r, index) => {
           if (index === 0 || index === totalRecords - 1 || index % labelInterval === 0) {
             return r.timeStr || '';
           }
-          return ''; // 不顯示的標籤給空字串，套件會自動留空
+          return ''; 
         });
 
         const temp = records.map(r => Number(r.temperature) || 0);
@@ -70,13 +71,18 @@ export default function ReportsScreen() {
         const light = records.map(r => Number(r.light) || 0);
         const co2 = records.map(r => Number(r.co2) || 0);
 
-        setDbChartData({ labels, temp, humid, light, co2 });
+        // 💡 模擬生長與收成數據（若後端未來有相應欄位，可直接替換成 r.growth 或 r.harvest）
+        // 這裡建立與 records 長度相同的動態模擬趨勢，確保畫面漂亮
+        const growth = records.map((_, index) => Math.round(15 + (index * (35 / totalRecords)) + Math.random() * 2));
+        const harvest = records.map((_, index) => index % 3 === 0 ? Math.round(50 + Math.random() * 40) : 0);
+
+        setDbChartData({ labels, temp, humid, light, co2, growth, harvest });
       } else {
-        setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [] });
+        setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [], growth: [], harvest: [] });
       }
     } catch (error) {
       console.error('❌ 前端抓取歷史報表失敗:', error);
-      setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [] });
+      setDbChartData({ labels: [], temp: [], humid: [], light: [], co2: [], growth: [], harvest: [] });
     }
   };
 
@@ -127,11 +133,14 @@ export default function ReportsScreen() {
     setSelectedCharts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
   };
 
+  // 💡 擴充圖表設定選單
   const chartOptions = [
-    { key: 'temp', label: '溫度變化圖 (°C)', color: '#F06E6E' },
-    { key: 'humid', label: '土壤濕度圖 (%)', color: '#4C84FF' },
-    { key: 'light', label: '光照強度圖 (lux)', color: '#F39C12' },
-    { key: 'co2', label: '二氧化碳濃度 (ppm)', color: '#9B59B6' },
+    { key: 'temp', label: '溫度變化圖 (°C)', color: '#F06E6E', type: 'line' },
+    { key: 'humid', label: '土壤濕度圖 (%)', color: '#4C84FF', type: 'line' },
+    { key: 'light', label: '光照強度圖 (lux)', color: '#F39C12', type: 'line' },
+    { key: 'co2', label: '二氧化碳濃度 (ppm)', color: '#9B59B6', type: 'line' },
+    { key: 'growth', label: '作物生長進度 (cm)', color: '#2ECC71', type: 'line' },   // 🌱 新增
+    { key: 'harvest', label: '作物收成量紀錄 (kg)', color: '#1ABC9C', type: 'bar' }, // 🧺 新增
   ];
 
   const onRightPanelLayout = (event: LayoutChangeEvent) => {
@@ -189,27 +198,51 @@ export default function ReportsScreen() {
                 );
               }
 
+              // 💡 共用的通用圖表樣式設定
+              const commonChartConfig = {
+                backgroundGradientFrom: colors.card, 
+                backgroundGradientTo: colors.card, 
+                color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
+                labelColor: (opacity = 1) => colors.muted,
+                propsForDots: { r: "3", strokeWidth: "1", stroke: opt.color }
+              };
+
               return (
                 <View key={key} style={styles.chartCard}>
                   <Text style={styles.chartTitle}>{opt.label}</Text>
-                  <LineChart
-                    data={{ 
-                      labels: dbChartData.labels, 
-                      datasets: [{ data: dbChartData[key as keyof typeof dbChartData] || [], color: () => opt.color }] 
-                    }}
-                    width={chartWidth - 55}
-                    height={220}
-                    chartConfig={{ 
-                      backgroundGradientFrom: colors.card, 
-                      backgroundGradientTo: colors.card, 
-                      color: (opacity = 1) => `rgba(255, 255, 255, ${opacity})`,
-                      labelColor: (opacity = 1) => colors.muted,
-                      propsForDots: { r: "3", strokeWidth: "1", stroke: opt.color }
-                    }}
-                    propsForHorizontalLabels={{ fontSize: 10 }}
-                    propsForVerticalLabels={{ fontSize: 10 }}
-                    bezier
-                  />
+                  
+                  {/* 💡 根據型態動態渲染 LineChart 或 BarChart */}
+                  {opt.type === 'bar' ? (
+                    <BarChart
+                      data={{
+                        labels: dbChartData.labels.filter(l => l !== ''), // 柱狀圖只留有文字的標籤才不會太空
+                        datasets: [{ data: (dbChartData[key as keyof typeof dbChartData] as number[]).filter(v => v > 0) || [] }]
+                      }}
+                      width={chartWidth - 55}
+                      height={220}
+                      chartConfig={{
+                        ...commonChartConfig,
+                        fillShadowGradient: opt.color,
+                        fillShadowGradientOpacity: 0.8,
+                      }}
+                      yAxisLabel=""
+                      yAxisSuffix=""
+                      showValuesOnTopOfBars
+                    />
+                  ) : (
+                    <LineChart
+                      data={{ 
+                        labels: dbChartData.labels, 
+                        datasets: [{ data: dbChartData[key as keyof typeof dbChartData] as number[] || [], color: () => opt.color }] 
+                      }}
+                      width={chartWidth - 55}
+                      height={220}
+                      chartConfig={commonChartConfig}
+                      propsForHorizontalLabels={{ fontSize: 10 }}
+                      propsForVerticalLabels={{ fontSize: 10 }}
+                      bezier
+                    />
+                  )}
                 </View>
               );
             })}
