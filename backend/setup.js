@@ -39,6 +39,15 @@ db.serialize(() => {
         FOREIGN KEY (user_id) REFERENCES USER(user_id)
     )`);
 
+    // 4.5 建立 ALERT_LOGS 表格 (警示紀錄)
+    db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
+        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        message TEXT,
+        record_time DATETIME DEFAULT (datetime('now', '+8 hours')),
+        FOREIGN KEY (user_id) REFERENCES USER(user_id)
+    )`);
+
     // 5. 建立 HISTORY 表格 (歷史紀錄)
     // 💡 修正：將時間預設值改為 台灣時區 (+8小時)，確保圖表時間軸正確
     db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
