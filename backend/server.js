@@ -1,4 +1,3 @@
-// server.js
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
@@ -37,182 +36,283 @@ function initializeDatabase() {
             history_soil_moisture REAL,
             history_light REAL,
             history_co2 REAL,
-            history_time TEXT
+            record_time TEXT
         )`);
 
-        // 💡 修正先前 ALERT_LOGS 找不到表崩潰的問題：確保 ALERT_LOGS 表存在
-        db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            type TEXT,
-            value REAL,
-            message TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )`);
-
-        // 2. 確保警示設定表存在
+        // 2. 建立警報設定範圍表
         db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT UNIQUE,
-            temp_min REAL,
-            temp_max REAL,
-            humid_min REAL,
-            humid_max REAL,
-            co2_min REAL,
-            co2_max REAL,
-            light_min REAL,
-            light_max REAL
+            user_id TEXT PRIMARY KEY,
+            temp_warning TEXT,
+            soil_warning TEXT,
+            co2_warning TEXT,
+            light_warning TEXT
         )`);
-        
-        console.log("⚙️ 資料表結構初始化檢查完畢！");
+
+        // 3. 建立警報紀錄表 (解決你目前報錯的核心問題)
+        db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
+            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            message TEXT,
+            record_time TEXT
+        )`);
+
+        // 4. 建立使用者表 (配合你的 /api/login 和 /api/register)
+        db.run(`CREATE TABLE IF NOT EXISTS USER (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nickname TEXT,
+            account TEXT UNIQUE,
+            password TEXT,
+            avatar TEXT
+        )`);
+
+        // 5. 建立排程設定表
+        db.run(`CREATE TABLE IF NOT EXISTS schedule_settings (
+            user_id TEXT PRIMARY KEY,
+            frequency TEXT,
+            duration TEXT,
+            updated_at TEXT
+        )`);
+
+        console.log("📋 資料庫資料表檢查與初始化完成！");
     });
 }
 
 // ==========================================
-// 核心修改：登入 API (/api/login)
+// 💡 背景自動寫入機制 (每 10 秒自動紀錄)
 // ==========================================
-app.post('/api/login', (req, res) => {
-    const { username, password } = req.body; // 前端傳過來的 account 對應 username，password 對應 password
+let lastAlertTimes = {}; // 紀錄各類警報最後發送時間，避免洗版 { "1_temp": timestamp }
 
-    // 1. 查詢該帳號是否存在於資料庫中
-    db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ?`, [username], (err, row) => {
-        if (err) {
-            console.error("❌ 登入查詢資料庫失敗:", err);
-            return res.status(500).json({ success: false, message: '資料庫查詢錯誤' });
-        }
+setInterval(() => {
+    const userIds = Object.keys(currentFarmStates);
 
-        // 2. 💡 如果找不到該帳號，回傳特定的「此帳號不存在」訊息，讓前端能夠正確顯示紅字
-        if (!row) {
-            return res.json({ success: false, message: '此帳號不存在' });
-        }
+    if (userIds.length === 0) return;
 
-        // 3. 💡 如果帳號存在，但密碼對不上，回傳「密碼輸入錯誤」訊息
-        if (row.password !== password) {
-            return res.json({ success: false, message: '密碼輸入錯誤' });
-        }
-
-        // 4. 驗證完全通過，登入成功
-        console.log(`✅ 使用者 [${row.account}] 登入成功！`);
-        res.json({
-            success: true,
-            user: {
-                user_id: row.id,     // 提供前端 AsyncStorage 所需的 userId
-                nickname: row.nickname,
-                account: row.account,
-                avatar: row.avatar
+    userIds.forEach((uid) => {
+        const state = currentFarmStates[uid];
+        
+        // 💡 寫入歷史數據
+        const sql = `
+            INSERT INTO HISTORY (user_id, history_temp, history_soil_moisture, history_light, history_co2, record_time) 
+            VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))
+        `;
+        
+        db.run(sql, [
+            String(uid), 
+            state.temperature, 
+            state.humidity, 
+            state.light,
+            state.co2
+        ], (err) => {
+            if (err) {
+                console.error(`❌ 定時寫入使用者 ${uid} 失敗:`, err.message);
+            } else {
+                console.log(`🕒 [定時紀錄] 成功幫使用者 ${uid} 寫入歷史數據:`, state);
             }
+        });
+
+        // 💡 檢查警示設定並產生紀錄
+        db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [uid], (err, row) => {
+            if (err || !row) return;
+
+            const checkAndAlert = (type, value, rangeStr, unit) => {
+                if (!rangeStr) return;
+                
+                let range;
+                try {
+                    range = JSON.parse(rangeStr);
+                } catch (e) {
+                    range = rangeStr.split(',').map(Number); // 相容先前的純逗號字串格式
+                }
+                
+                if (value < range[0] || value > range[1]) {
+                    const alertKey = `${uid}_${type}`;
+                    const now = Date.now();
+                    // 60秒內不重複發送同類型警報
+                    if (!lastAlertTimes[alertKey] || now - lastAlertTimes[alertKey] > 60000) {
+                        const msg = `⚠️ ${type}異常！當前數值 ${value}${unit} (允許範圍: ${range[0]}~${range[1]})`;
+                        db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [uid, msg]);
+                        lastAlertTimes[alertKey] = now;
+                        console.log(`🚨 [警示觸發] ${msg}`);
+                    }
+                }
+            };
+
+            checkAndAlert('環境溫度', state.temperature, row.temp_warning, '°C');
+            checkAndAlert('土壤濕度', state.humidity, row.soil_warning, '%');
+            checkAndAlert('二氧化碳', state.co2, row.co2_warning, 'ppm');
+            checkAndAlert('光照強度', state.light, row.light_warning, 'lux');
+        });
+    });
+}, 10000); 
+
+
+// ==========================================
+//                 API 路由區塊
+// ==========================================
+
+// 💡 1. 偵錯專用 API (優化：使用 substr 切割日期展示)
+app.get('/api/debug/history', (req, res) => {
+    db.all("SELECT *, substr(record_time, 1, 10) as datePart FROM HISTORY ORDER BY record_time DESC LIMIT 20", [], (err, rows) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({
+            total_states_in_memory: currentFarmStates,
+            database_rows: rows
         });
     });
 });
 
-// ==========================================
-// 註冊 API (/api/register)
-// ==========================================
-app.post('/api/register', (req, res) => {
-    const { username, password, nickname, avatar } = req.body;
+// 💡 2. 控制面板滑軌放開時更新暫存
+app.post('/api/simulator/update', (req, res) => {
+    let { userId, temperature, humidity, co2, light } = req.body;
+
+    if (!userId) userId = "1";
+    const uidStr = String(userId);
+
+    if (!currentFarmStates[uidStr]) {
+        currentFarmStates[uidStr] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+    }
+
+    if (temperature !== undefined) currentFarmStates[uidStr].temperature = Number(temperature);
+    if (humidity !== undefined) currentFarmStates[uidStr].humidity = Number(humidity);
+    if (co2 !== undefined) currentFarmStates[uidStr].co2 = Number(co2);
+    if (light !== undefined) currentFarmStates[uidStr].light = Number(light);
+
+    console.log(`🎛️ 使用者 ${uidStr} 更新了控制面板暫存:`, currentFarmStates[uidStr]);
+
+    res.json({ success: true, currentState: currentFarmStates[uidStr] });
+});
+
+// 💡 3. 報表分頁查詢歷史數據 (🔥 終極相容防爆版)
+app.get('/api/reports/history', (req, res) => {
+    let { startDate, endDate, date, userId } = req.query;
+
+    if (!userId) userId = "1";
     
-    // 檢查帳號是否已被註冊
-    db.get(`SELECT * FROM USER WHERE account = ?`, [username], (err, row) => {
-        if (row) {
-            return res.json({ success: false, message: '帳號已被註冊' });
+    // 💡 核心相容轉換：如果前端傳過來的是舊版參數 date，我們自動幫它映射到 start 變數上
+    const start = startDate || date;
+    const end = endDate || start;
+
+    if (!start) {
+        console.log("⚠️ 收到一個未包含任何日期參數的非法請求，拒絕查詢以免噴錯。");
+        return res.json({ success: false, historyData: [] }); // 安全回傳空陣列防爆
+    }
+
+    console.log(`📊 [API 歷史查詢] 使用者 ${userId} 正在查詢 ${start} 到 ${end} 的數據...`);
+
+    // 💡 這裡已修正：將 history_soil 改為 history_soil_moisture，維持輸出別名為 humidity 讓前端無感對接
+    const sql = `
+        SELECT 
+            history_temp as temperature, 
+            history_soil_moisture as humidity, 
+            history_co2 as co2, 
+            history_light as light, 
+            CASE 
+                WHEN ? = ? THEN substr(record_time, 12, 5)
+                ELSE substr(record_time, 6, 11)
+            END as timeStr 
+        FROM HISTORY 
+        WHERE substr(record_time, 1, 10) BETWEEN ? AND ? AND user_id = ?
+        ORDER BY record_time ASC
+    `;
+
+    db.all(sql, [start, end, start, end, String(userId)], (err, rows) => {
+        if (err) {
+            console.error("❌ 查詢歷史報表失敗:", err.message);
+            return res.status(500).json({ success: false, historyData: [], message: "資料庫查詢錯誤" });
         }
         
-        // 插入新使用者
-        db.run(`INSERT INTO USER (nickname, account, password, avatar) VALUES (?, ?, ?, ?)`, 
-            [nickname || username, username, password, avatar || ''], 
-            function(err) {
-                if (err) return res.json({ success: false, message: '註冊失敗' });
-                res.json({ success: true });
-            }
-        );
+        const safeRows = rows || [];
+        console.log(`📊 查詢結果：成功找到 ${safeRows.length} 筆資料，即將發送回前端。`);
+        res.json({ success: true, historyData: safeRows });
     });
 });
 
-// ==========================================
-// 其他功能 API 路由 (環境、警示、排程)
-// ==========================================
-app.get('/api/farm/state', (req, res) => {
-    const userId = req.query.userId || "1";
-    if (!currentFarmStates[userId]) {
-        currentFarmStates[userId] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
-    }
-    res.json({ success: true, state: currentFarmStates[userId] });
-});
-
-app.post('/api/farm/control', (req, res) => {
-    const { userId, type, value } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: 'Missing userId' });
-    
-    if (!currentFarmStates[userId]) {
-        currentFarmStates[userId] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
-    }
-
-    if (type === 'temp') currentFarmStates[userId].temperature = Number(value);
-    if (type === 'humid') currentFarmStates[userId].humidity = Number(value);
-    if (type === 'co2') currentFarmStates[userId].co2 = Number(value);
-    if (type === 'light') currentFarmStates[userId].light = Number(value);
-
-    // 💡 同步模擬將數據寫入歷史報表 (HISTORY)，以便前端報表查看
-    db.run(`INSERT INTO HISTORY (user_id, history_temp, history_soil_moisture, history_light, history_co2, history_time) 
-            VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
-        [userId, currentFarmStates[userId].temperature, currentFarmStates[userId].humidity, currentFarmStates[userId].light, currentFarmStates[userId].co2],
-        (err) => {
-            if (err) console.error("❌ 寫入歷史紀錄失敗:", err.message);
+// === 以下維持不變 ===
+app.post('/api/register', (req, res) => {
+    const { nickname, username, password, confirmPassword } = req.body;
+    if (!nickname || !username || !password || !confirmPassword) return res.status(400).json({ success: false, message: "請填寫所有欄位" });
+    if (password !== confirmPassword) return res.status(400).json({ success: false, message: "兩次輸入的密碼不一致" });
+    const sql = `INSERT INTO USER (nickname, account, password) VALUES (?, ?, ?)`;
+    db.run(sql, [nickname, username, password], function(err) {
+        if (err) {
+            if (err.message.includes('UNIQUE constraint failed: USER.account')) return res.status(409).json({ success: false, message: "這個帳號已經有人使用了，請換一個！" });
+            return res.status(500).json({ success: false, message: "伺服器發生未知的錯誤" });
         }
-    );
-
-    res.json({ success: true, state: currentFarmStates[userId] });
-});
-
-app.get('/api/reports/history', (req, res) => {
-    const { startDate, endDate, userId } = req.query;
-    db.all(`SELECT history_temp as temperature, history_soil_moisture as humidity, history_light as light, history_co2 as co2, strftime('%m-%d %H:%M', history_time) as timeStr 
-            FROM HISTORY WHERE user_id = ? AND date(history_time) BETWEEN date(?) AND date(?) ORDER BY history_time ASC`, 
-        [userId, startDate, endDate], 
-        (err, rows) => {
-            if (err) return res.status(500).json({ success: false, historyData: [] });
-            res.json({ success: true, historyData: rows });
+        res.json({ success: true, message: "註冊成功！", user: { id: this.lastID, nickname: nickname, account: username } });
     });
 });
 
-app.get('/api/alerts/settings', (req, res) => {
-    const userId = req.query.userId;
-    db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [userId], (err, row) => {
-        if (row) {
-            res.json({
-                success: true,
-                settings: {
-                    tempRange: [row.temp_min, row.temp_max],
-                    humidRange: [row.humid_min, row.humid_max],
-                    co2Range: [row.co2_min, row.co2_max],
-                    lightRange: [row.light_min, row.light_max]
-                }
-            });
-        } else {
-            res.json({ success: false, settings: null });
-        }
+app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    const sql = `SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ? AND password = ?`;
+    db.get(sql, [username, password], (err, row) => {
+        if (err) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
+        if (row) res.json({ success: true, message: "登入成功！", user: row });
+        else res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
     });
 });
 
 app.post('/api/alerts/settings', (req, res) => {
     const { userId, tempRange, humidRange, co2Range, lightRange } = req.body;
-    db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [userId], (err, row) => {
+    if (!userId) return res.status(400).json({ success: false, message: "缺少使用者 ID" });
+    const tempStr = JSON.stringify(tempRange);
+    const soilStr = JSON.stringify(humidRange);
+    const co2Str = JSON.stringify(co2Range);
+    const lightStr = JSON.stringify(lightRange);
+    const checkSql = `SELECT * FROM WARNING_RANGE WHERE user_id = ?`;
+    db.get(checkSql, [userId], (err, row) => {
         if (row) {
-            db.run(`UPDATE WARNING_RANGE SET temp_min=?, temp_max=?, humid_min=?, humid_max=?, co2_min=?, co2_max=?, light_min=?, light_max=? WHERE user_id=?`,
-                [tempRange[0], tempRange[1], humidRange[0], humidRange[1], co2Range[0], co2Range[1], lightRange[0], lightRange[1], userId],
-                () => res.json({ success: true }));
+            const updateSql = `UPDATE WARNING_RANGE SET temp_warning = ?, soil_warning = ?, co2_warning = ?, light_warning = ? WHERE user_id = ?`;
+            db.run(updateSql, [tempStr, soilStr, co2Str, lightStr, userId], () => res.json({ success: true, message: "設定更新成功！" }));
         } else {
-            db.run(`INSERT INTO WARNING_RANGE (user_id, temp_min, temp_max, humid_min, humid_max, co2_min, co2_max, light_min, light_max) VALUES (?,?,?,?,?,?,?,?,?)`,
-                [userId, tempRange[0], tempRange[1], humidRange[0], humidRange[1], co2Range[0], co2Range[1], lightRange[0], lightRange[1]],
-                () => res.json({ success: true }));
+            const insertSql = `INSERT INTO WARNING_RANGE (user_id, temp_warning, soil_warning, co2_warning, light_warning) VALUES (?, ?, ?, ?, ?)`;
+            db.run(insertSql, [userId, tempStr, soilStr, co2Str, lightStr], () => res.json({ success: true, message: "設定新增成功！" }));
         }
+    });
+});
+
+app.get('/api/alerts/settings', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [userId], (err, row) => {
+        if (!row) return res.json({ success: true, settings: null });
+        
+        // 防呆解析函數：同時支援 JSON 陣列與逗號字串
+        const safeParse = (str) => {
+            if (!str) return null;
+            try {
+                return JSON.parse(str);
+            } catch (e) {
+                return str.split(',').map(Number);
+            }
+        };
+
+        res.json({
+            success: true,
+            settings: {
+                tempRange: safeParse(row.temp_warning),
+                humidRange: safeParse(row.soil_warning),
+                co2Range: safeParse(row.co2_warning),
+                lightRange: safeParse(row.light_warning) || [500, 50000]
+            }
+        });
+    });
+});
+
+app.post('/api/alerts/logs', (req, res) => {
+    const { userId, message } = req.body;
+    if (!userId || !message) return res.status(400).json({ success: false, message: "缺少必要參數" });
+    db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [userId, message], function(err) {
+        if (err) return res.status(500).json({ success: false, message: "新增紀錄失敗" });
+        res.json({ success: true, message: "新增紀錄成功", id: this.lastID });
     });
 });
 
 app.get('/api/alerts/logs', (req, res) => {
     const userId = req.query.userId;
-    db.all(`SELECT type, value, message, strftime('%m-%d %H:%M', timestamp) as timeStr FROM ALERT_LOGS WHERE user_id = ? ORDER BY id DESC LIMIT 20`, [userId], (err, rows) => {
-        if (err) return res.status(500).json({ success: false, logs: [] });
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    db.all(`SELECT log_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: "查詢紀錄失敗" });
         res.json({ success: true, logs: rows || [] });
     });
 });
@@ -239,6 +339,12 @@ app.put('/api/users/:id', (req, res) => {
     db.run(`UPDATE USER SET nickname = ? WHERE rowid = ?`, [req.body.nickname, req.params.id], () => res.json({ success: true }));
 });
 
+app.put('/api/users/:id/avatar', (req, res) => {
+    db.run(`UPDATE USER SET avatar = ? WHERE rowid = ?`, [req.body.avatar, req.params.id], () => res.json({ success: true }));
+});
+
+app.use('/api/crops', require('./routes/crops'));
+
 app.listen(port, () => {
-    console.log(`🚀 智慧農場後端伺服器正運行於 http://localhost:${port}`);
+    console.log(`🚀 後端多使用者架構伺服器已啟動：http://localhost:${port}`);
 });
