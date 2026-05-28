@@ -1,8 +1,8 @@
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Dimensions, LayoutChangeEvent, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Calendar } from 'react-native-calendars';
+import { Calendar, DateData } from 'react-native-calendars';
 import { BarChart, LineChart } from 'react-native-chart-kit';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -82,7 +82,7 @@ export default function ReportsScreen() {
     fetchHistoryData();
   }, [startDate, endDate]);
 
-  const handleDayPress = (day: any) => {
+  const handleDayPress = (day: DateData) => {
     if (!startDate || (startDate && endDate)) {
       setStartDate(day.dateString);
       setEndDate('');
@@ -97,9 +97,10 @@ export default function ReportsScreen() {
     }
   };
 
-  const getMarkedDates = () => {
+  // 💡 效能優化：使用 useMemo 避免每次畫面重新渲染都去跑一次 while 迴圈計算日期
+  const markedDates = useMemo(() => {
     if (!startDate) return {};
-    const marked: any = {};
+    const marked: Record<string, any> = {};
     if (!endDate) {
       marked[startDate] = { startingDay: true, endingDay: true, color: '#2e4f45', textColor: '#FFF' };
       return marked;
@@ -119,7 +120,7 @@ export default function ReportsScreen() {
       current.setDate(current.getDate() + 1);
     }
     return marked;
-  };
+  }, [startDate, endDate]);
 
   const toggleChart = (key: string) => {
     setSelectedCharts(prev => prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]);
@@ -148,7 +149,7 @@ export default function ReportsScreen() {
             <View key="calendar-container" style={styles.calendarWrapper}>
               <Calendar
                 markingType={'period'}
-                markedDates={getMarkedDates()}
+                markedDates={markedDates}
                 onDayPress={handleDayPress}
                 theme={{ calendarBackground: colors.leftPanel, dayTextColor: colors.text, monthTextColor: colors.text, arrowColor: colors.secondary }}
               />

@@ -1,7 +1,7 @@
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
@@ -22,9 +22,25 @@ const formatDateTime = (dateString: string) => {
   return `${year}/${month}/${day} ${hours}:${minutes}`;
 };
 
+// 💡 新增：作物資料與歷史紀錄的 TypeScript 型別定義
+interface CropHistory {
+  timestamp: string;
+  stage: string;
+  status: string;
+}
+
+interface Crop {
+  id: number;
+  name: string;
+  stage: string;
+  status: string;
+  image: string | null;
+  history?: CropHistory[];
+}
+
 export default function CropsScreen() {
   // === 狀態管理 ===
-  const [crops, setCrops] = useState<any[]>([]);
+  const [crops, setCrops] = useState<Crop[]>([]);
 
   const [isModalVisible, setIsModalVisible] = useState(false);
 
@@ -98,7 +114,7 @@ export default function CropsScreen() {
   };
 
   // 💡 開啟編輯模式：將卡片資料帶入表單中
-  const handleEditCrop = (crop: any) => {
+  const handleEditCrop = (crop: Crop) => {
     setEditingCropId(crop.id);
     setCropName(crop.name);
     setCropStage(crop.stage);
@@ -324,7 +340,7 @@ export default function CropsScreen() {
               {/* 💡 將歷史紀錄包裹在 ScrollView 中，並開啟 nestedScrollEnabled */}
               <ScrollView style={styles.historyScrollArea} nestedScrollEnabled={true} showsVerticalScrollIndicator={false}>
                 {item.history && item.history.length > 0 ? (
-                  [...item.history].reverse().map((h: any, idx: number) => (
+                  [...item.history].reverse().map((h: CropHistory, idx: number) => (
                     <Text key={idx} style={styles.historyText}>
                       {formatDateTime(h.timestamp)} {h.stage} {h.status}
                     </Text>

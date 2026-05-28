@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'; // 💡 �
 import Slider from '@react-native-community/slider';
 import { useFocusEffect } from '@react-navigation/native'; // 💡 新增：確保每次切換回此頁面都會重新抓資料
 import { router } from 'expo-router';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
@@ -127,14 +127,15 @@ export default function EnvironmentScreen() {
   // 💡 7.5 新增：監聽控制面板值變化，自動保存到 AsyncStorage
   useEffect(() => {
     if (isLoaded) {
-      saveControlSettings({
-        temperature,
-        humidity,
-        co2,
-        light,
-        frequency,
-        duration
-      });
+      // 💡 效能優化：使用 setTimeout 加入防抖 (Debounce) 機制
+      // 避免在拖曳滑軌時，每秒觸發數十次 AsyncStorage 寫入造成 UI 卡頓
+      const timeoutId = setTimeout(() => {
+        saveControlSettings({
+          temperature, humidity, co2, light, frequency, duration
+        });
+      }, 500); // 停止數值變動後 0.5 秒才執行寫入
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [temperature, humidity, co2, light, frequency, duration, isLoaded]);
 
@@ -232,8 +233,8 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 控制面板滑軌元件
-  const renderSliderControl = (label: string, value: number, setter: any, min: number, max: number, unit: string, apiKey: string) => (
+  // 控制面板滑軌元件 (修正 TypeScript 型別報錯)
+  const renderSliderControl = (label: string, value: number, setter: (val: number) => void, min: number, max: number, unit: string, apiKey: 'temperature' | 'humidity' | 'co2' | 'light') => (
     <View style={styles.controlRow}>
       <View style={styles.controlLabelGroup}>
         <Text style={styles.controlLabel}>{label}</Text>
@@ -246,7 +247,7 @@ export default function EnvironmentScreen() {
         value={value}
         onValueChange={setter}
         onSlidingComplete={(v) => { 
-          updateBackendSimulator({ [apiKey]: Math.round(v) });
+          updateBackendSimulator({ [apiKey]: Math.round(v) } as Parameters<typeof updateBackendSimulator>[0]);
         }}
         step={1}
         minimumTrackTintColor={colors.primary}
@@ -259,7 +260,8 @@ export default function EnvironmentScreen() {
   const pickerSelectStyles = StyleSheet.create({
     inputIOS: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
     inputAndroid: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
-    inputWeb: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent', borderWidth: 0, outlineStyle: 'none', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', cursor: 'pointer' },
+    // 💡 新增 as any 避免 TypeScript 檢查 Web 專屬的 CSS 屬性報錯
+    inputWeb: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent', borderWidth: 0, outlineStyle: 'none', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', cursor: 'pointer' } as any,
     placeholder: { color: '#999999' },
     iconContainer: { top: 12, right: 10 },
   });

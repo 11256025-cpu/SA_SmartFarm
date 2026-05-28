@@ -2,7 +2,7 @@ import { FontAwesome, Ionicons } from '@expo/vector-icons'; // 新增 icon 函�
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -20,7 +20,7 @@ export default function ProfileScreen() {
   // 初始化：從後端或 AsyncStorage 取得資料
   useEffect(() => {
     // 建立一個帶有 Timeout 功能的 fetch，避免後端沒開時無限等待
-    const fetchWithTimeout = (url: string, options: any = {}, timeout = 3000) => {
+    const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = 3000) => {
       return Promise.race([
         fetch(url, options),
         new Promise((_, reject) => setTimeout(() => reject(new Error('連線逾時')), timeout))

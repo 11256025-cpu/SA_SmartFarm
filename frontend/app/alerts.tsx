@@ -2,13 +2,21 @@ import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
-import { Alert, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
 // 自動判斷執行環境，避免 localhost 在實機上連不到
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+
+// 💡 新增：警示紀錄的型別定義
+interface AlertLog {
+  id: number;
+  msg: string;
+  date: string;
+  time: string;
+}
 
 export default function AlertsScreen() {
   // 1. 警示閾值狀態：[下限, 上限]
@@ -58,7 +66,7 @@ export default function AlertsScreen() {
   }, []);
 
   // 3. 警示紀錄數據狀態 (預設為空陣列)
-  const [alertLogs, setAlertLogs] = useState<any[]>([]);
+  const [alertLogs, setAlertLogs] = useState<AlertLog[]>([]);
 
   // 每次進入頁面時，向後端取得最新的警示紀錄
   useFocusEffect(
@@ -119,8 +127,8 @@ export default function AlertsScreen() {
     }
   };
 
-  // 4. 渲染「左右包夾」的範圍設定滑軌元件
-  const renderRangeSetting = (label, values, setter, min, max, unit, step = 1) => (
+  // 4. 渲染「左右包夾」的範圍設定滑軌元件 (加入型別定義避免紅底)
+  const renderRangeSetting = (label: string, values: number[], setter: (vals: number[]) => void, min: number, max: number, unit: string, step: number = 1) => (
     <View style={styles.settingCard}>
       <View style={styles.settingHeaderRow}>
         <Text style={styles.settingLabel}>{label}</Text>
@@ -214,20 +222,25 @@ export default function AlertsScreen() {
               <FontAwesome name="trash-o" size={18} color={colors.muted} />
             </TouchableOpacity>
           </View>
-          <ScrollView style={styles.logsScrollArea} showsVerticalScrollIndicator={true} nestedScrollEnabled={true}>
-              {alertLogs.map((log) => (
-                <View key={log.id} style={styles.logItem}>
-                  <View style={styles.logIcon}>
-                    <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.logMsg}>{log.msg}</Text>
-                    <Text style={styles.logTime}>{log.date} {log.time}</Text>
-                  </View>
+          {/* 💡 效能優化：將 ScrollView + map 改為 FlatList，大幅提升長列表渲染效能 */}
+          <FlatList
+            data={alertLogs}
+            keyExtractor={(item) => String(item.id)}
+            style={styles.logsScrollArea}
+            showsVerticalScrollIndicator={true}
+            ListEmptyComponent={<Text style={styles.emptyText}>暫無警示紀錄。</Text>}
+            renderItem={({ item: log }) => (
+              <View style={styles.logItem}>
+                <View style={styles.logIcon}>
+                  <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
                 </View>
-              ))}
-              {alertLogs.length === 0 && <Text style={styles.emptyText}>暫無警示紀錄。</Text>}
-            </ScrollView>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.logMsg}>{log.msg}</Text>
+                  <Text style={styles.logTime}>{log.date} {log.time}</Text>
+                </View>
+              </View>
+            )}
+          />
         </View>
       )}
       right={(
