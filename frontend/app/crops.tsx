@@ -181,67 +181,96 @@ export default function CropsScreen() {
   const handleClearHistory = async () => {
     if (!editingCropId) return;
 
-    // 跳出再次確認的對話框，防止誤觸
-    Alert.alert(
-      "確認清空紀錄",
-      "此操作將會永久刪除該作物所有的狀態變更歷史，且無法復原。確定要繼續嗎？",
-      [
-        { text: "取消", style: "cancel" },
-        {
-          text: "確定清空",
-          style: 'destructive', // 在 iOS 上會顯示為紅色按鈕
-          onPress: async () => {
-            try {
-              const cropToUpdate = crops.find(c => c.id === editingCropId);
-              if (!cropToUpdate) {
-                alert('找不到要更新的作物。');
-                return;
-              }
+    const performClear = async () => {
+      try {
+        const cropToUpdate = crops.find(c => c.id === editingCropId);
+        if (!cropToUpdate) {
+          alert('找不到要更新的作物。');
+          return;
+        }
 
-              // 準備一個 history 為空陣列的 payload
-              const payload = { ...cropToUpdate, history: [] };
+        // 準備一個 history 為空陣列的 payload
+        const payload = { ...cropToUpdate, history: [] };
 
-              const response = await fetch(`${BASE_URL}/api/crops/${editingCropId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload),
-              });
+        const response = await fetch(`${BASE_URL}/api/crops/${editingCropId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
 
-              const data = await response.json();
-              if (data.success) {
-                alert('✅ 歷史紀錄已成功清空！');
-                // 直接更新前端狀態，讓畫面同步刷新
-                setCrops(crops.map(c => (c.id === editingCropId ? { ...c, history: [] } : c)));
-              } else {
-                alert(`❌ 清空失敗：${data.message || '請稍後再試'}`);
-              }
-            } catch (error) { console.error('清空歷史紀錄時發生錯誤:', error); alert('⚠️ 無法連線到伺服器。'); }
+        const data = await response.json();
+        if (data.success) {
+          alert('✅ 歷史紀錄已成功清空！');
+          // 直接更新前端狀態，讓畫面同步刷新
+          setCrops(crops.map(c => (c.id === editingCropId ? { ...c, history: [] } : c)));
+        } else {
+          alert(`❌ 清空失敗：${data.message || '請稍後再試'}`);
+        }
+      } catch (error) { console.error('清空歷史紀錄時發生錯誤:', error); alert('⚠️ 無法連線到伺服器。'); }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm("此操作將會永久刪除該作物所有的狀態變更歷史，且無法復原。確定要繼續嗎？")) {
+        performClear();
+      }
+    } else {
+      // 跳出再次確認的對話框，防止誤觸
+      Alert.alert(
+        "確認清空紀錄",
+        "此操作將會永久刪除該作物所有的狀態變更歷史，且無法復原。確定要繼續嗎？",
+        [
+          { text: "取消", style: "cancel" },
+          {
+            text: "確定清空",
+            style: 'destructive', // 在 iOS 上會顯示為紅色按鈕
+            onPress: performClear,
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   // 💡 刪除作物
   const handleDeleteCrop = async () => {
     if (!editingCropId) return;
     
-    try {
-      const response = await fetch(`${BASE_URL}/api/crops/${editingCropId}`, {
-        method: 'DELETE',
-      });
+    const performDelete = async () => {
+      try {
+        const response = await fetch(`${BASE_URL}/api/crops/${editingCropId}`, {
+          method: 'DELETE',
+        });
 
-      const data = await response.json();
-      if (data.success) {
-        alert('🗑️ 作物已成功刪除！');
-        setCrops(crops.filter(c => c.id !== editingCropId));
-        handleCloseModal();
-      } else {
-        alert(`❌ 刪除失敗：${data.message || '請稍後再試'}`);
+        const data = await response.json();
+        if (data.success) {
+          alert('🗑️ 作物已成功刪除！');
+          setCrops(crops.filter(c => c.id !== editingCropId));
+          handleCloseModal();
+        } else {
+          alert(`❌ 刪除失敗：${data.message || '請稍後再試'}`);
+        }
+      } catch (error) {
+        console.error('刪除作物時發生錯誤:', error);
+        alert('⚠️ 無法連線到伺服器。');
       }
-    } catch (error) {
-      console.error('刪除作物時發生錯誤:', error);
-      alert('⚠️ 無法連線到伺服器。');
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm("確定要刪除此作物嗎？此操作無法復原。")) {
+        performDelete();
+      }
+    } else {
+      Alert.alert(
+        "確認刪除",
+        "確定要刪除此作物嗎？此操作無法復原。",
+        [
+          { text: "取消", style: "cancel" },
+          {
+            text: "確定刪除",
+            style: 'destructive',
+            onPress: performDelete,
+          },
+        ]
+      );
     }
   };
 
