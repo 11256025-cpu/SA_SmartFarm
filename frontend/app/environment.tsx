@@ -71,6 +71,24 @@ export default function EnvironmentScreen() {
       } catch (e) {
         console.warn('載入排程設定失敗', e);
       }
+
+      // 再抓一次使用者的模擬器當前狀態（記憶體或最近一筆歷史紀錄），並覆蓋控制面板數值
+      try {
+        const stateResp = await fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`);
+        const stateData = await stateResp.json();
+        if (stateData.success && stateData.state) {
+          const s = stateData.state;
+          if (s.temperature !== undefined) setTemperature(Number(s.temperature));
+          if (s.humidity !== undefined) setHumidity(Number(s.humidity));
+          if (s.co2 !== undefined) setCo2(Number(s.co2));
+          if (s.light !== undefined) setLight(Number(s.light));
+
+          // 將載入的 server 值同步到本機保存，避免使用者看到跳動
+          saveControlSettings({ temperature: Number(s.temperature), humidity: Number(s.humidity), co2: Number(s.co2), light: Number(s.light), frequency, duration });
+        }
+      } catch (e) {
+        console.warn('載入模擬器當前狀態失敗', e);
+      }
     } catch (error) {
       console.warn('載入警示設定失敗，使用預設值。', error);
     }

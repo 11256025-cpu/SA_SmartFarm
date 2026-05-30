@@ -162,6 +162,34 @@ app.get('/api/debug/history', (req, res) => {
     });
 });
 
+// 取得使用者當前模擬器狀態：先從記憶體 currentFarmStates，若沒有則回溯 HISTORY 最近一筆
+app.get('/api/simulator/state', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
+    const uid = String(userId);
+
+    if (currentFarmStates[uid]) {
+        return res.json({ success: true, state: currentFarmStates[uid] });
+    }
+
+    const sql = `SELECT history_temp as temperature, history_soil_moisture as humidity, history_co2 as co2, history_light as light, record_time FROM HISTORY WHERE user_id = ? ORDER BY record_time DESC LIMIT 1`;
+    db.get(sql, [uid], (err, row) => {
+        if (err) return res.status(500).json({ success: false, message: '資料庫查詢錯誤' });
+        if (!row) return res.json({ success: true, state: null });
+
+        const state = {
+            temperature: Number(row.temperature),
+            humidity: Number(row.humidity),
+            co2: Number(row.co2),
+            light: Number(row.light),
+            record_time: row.record_time
+        };
+        // 初始化記憶體狀態，後續可被模擬器更新
+        currentFarmStates[uid] = state;
+        return res.json({ success: true, state });
+    });
+});
+
 // 💡 2. 控制面板滑軌放開時更新暫存
 app.post('/api/simulator/update', (req, res) => {
     let { userId, temperature, humidity, co2, light } = req.body;
@@ -252,24 +280,22 @@ app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     if (!username || !password) return res.status(400).json({ success: false, message: "請輸入帳號與密碼" });
 
-    // 先檢查帳號是否存在，再確認密碼（方便除錯）
-    console.log(`[/api/login] incoming username='${username}', passwordLength=${password ? password.length : 0}`);
-        db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ?`, [username], (err, row) => {
-            console.log('[/api/login] db.get callback, err=', err ? err.message : null, 'row=', row);
+    // 先檢查帳號是否存在，再確認密碼（debug 日誌已縮減）
+    db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ?`, [username], (err, row) => {
+            if (err) console.error('[/api/login] db.get error:', err.message);
             if (err) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
             const handleNotFound = () => {
                 // 若輸入為純數字，嘗試以 rowid 或 id 查詢（支援直接輸入 userId 登入）
                 if (/^\d+$/.test(username)) {
                     db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE rowid = ? OR id = ?`, [username, username], (err2, row2) => {
                         console.log('[/api/login] second db.get callback by id, err=', err2 ? err2.message : null, 'row2=', row2);
-                        if (err2) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
-                        if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
-                        if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
-                        const uidStr2 = String(row2.id);
-                        if (!currentFarmStates[uidStr2]) {
-                            currentFarmStates[uidStr2] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
-                            console.log(`🆕 已為使用者 ${uidStr2} 建立初始暫存`);
-                        }
+                                if (err2) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
+                                if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
+                                if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
+                                const uidStr2 = String(row2.id);
+                                if (!currentFarmStates[uidStr2]) {
+                                    currentFarmStates[uidStr2] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+                                }
                         return res.json({ success: true, message: "登入成功！", user: row2 });
                     });
                 } else {
