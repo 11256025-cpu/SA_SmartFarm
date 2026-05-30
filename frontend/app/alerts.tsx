@@ -68,19 +68,6 @@ export default function AlertsScreen() {
   // 3. 警示紀錄數據狀態 (預設為空陣列)
   const [alertLogs, setAlertLogs] = useState<AlertLog[]>([]);
 
-  // 解析警示訊息，嘗試抽出 userId 與淨化訊息內容
-  const parseAlertMessage = (raw: string) => {
-    if (!raw) return { userId: null, message: '' };
-    // 支援範例："🚨 [警示觸發] 使用者 2 ⚠️ 環境溫度異常！當前數值 -30°C (...)"
-    const userMatch = raw.match(/使用者\s*#?(\d+)/);
-    const userId = userMatch ? userMatch[1] : null;
-    // 移除開頭的 emoji 與使用者標籤，保留主要內容
-    let cleaned = raw.replace(/🚨\s*\[?警示觸發\]?/g, '').replace(/使用者\s*#?\d+/g, '').trim();
-    // 移除兩側多餘標記
-    cleaned = cleaned.replace(/^[:：\-–\s]+|[:：\-–\s]+$/g, '');
-    return { userId, message: cleaned };
-  };
-
   // 每次進入頁面時，向後端取得最新的警示紀錄
   useFocusEffect(
     useCallback(() => {
@@ -228,7 +215,7 @@ export default function AlertsScreen() {
       leftFlex={4}
       rightFlex={6}
       left={(
-        <View style={styles.logSection}>
+        <View style={{ flex: 1 }}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>最近警示紀錄</Text>
               <TouchableOpacity onPress={handleClearLogs}>
@@ -240,34 +227,19 @@ export default function AlertsScreen() {
             data={alertLogs}
             keyExtractor={(item) => String(item.id)}
             style={styles.logsScrollArea}
-            contentContainerStyle={{ paddingBottom: 24 }}
             showsVerticalScrollIndicator={true}
             ListEmptyComponent={<Text style={styles.emptyText}>暫無警示紀錄。</Text>}
-            renderItem={({ item: log }) => {
-              const parsed = parseAlertMessage(log.msg);
-              return (
-                <TouchableOpacity activeOpacity={0.9} style={styles.logItemHorizontal}>
-                  <View style={styles.logIcon}>
-                    <FontAwesome name="exclamation-triangle" size={16} color={'#ff6e6e'} />
-                  </View>
-
-                  <View style={styles.logContent}>
-                    <View style={styles.rowTop}>
-                      <Text style={styles.logMsgSingle} numberOfLines={1} ellipsizeMode="tail">{parsed.message}</Text>
-                    </View>
-                    <View style={styles.rowBottom}>
-                      <Text style={styles.smallMeta}>來源: 系統</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.timeContainer}>
-                    {parsed.userId ? <View style={styles.userTag}><Text style={styles.userTagText}>#{parsed.userId}</Text></View> : null}
-                    <Text style={styles.logTime}>{log.date}</Text>
-                    <Text style={styles.logTime}>{log.time}</Text>
-                  </View>
-                </TouchableOpacity>
-              );
-            }}
+            renderItem={({ item: log }) => (
+              <View style={styles.logItem}>
+                <View style={styles.logIcon}>
+                  <FontAwesome name="exclamation-triangle" size={14} color={colors.alert} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.logMsg}>{log.msg}</Text>
+                  <Text style={styles.logTime}>{log.date} {log.time}</Text>
+                </View>
+              </View>
+            )}
           />
         </View>
       )}
@@ -299,6 +271,7 @@ const styles = StyleSheet.create({
   scrollContent: { flexGrow: 1, alignItems: 'center' },
   mainLayout: { flex: 1, flexDirection: 'row', padding: spacing.xl, gap: 25 },
   contentRow: { flexDirection: 'row', gap: 30, width: '100%' },
+  logSection: { width: '38%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
   settingSection: { width: '62%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { color: colors.text, fontSize: 20, fontWeight: 'bold' },
@@ -309,8 +282,8 @@ const styles = StyleSheet.create({
     borderRadius: radii.md, 
     marginBottom: 14,
     alignItems: 'flex-start',
-    borderLeftWidth: 6,
-    borderLeftColor: '#ff6e6e',
+    borderLeftWidth: 4,
+    borderLeftColor: colors.alert,
     borderWidth: 1,
     borderColor: colors.border,
     shadowColor: '#000',
@@ -319,36 +292,11 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  logItemHorizontal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: radii.md,
-    marginBottom: 12,
-    borderLeftWidth: 6,
-    borderLeftColor: '#ff6e6e',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  logIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: 'rgba(255,110,110,0.08)', justifyContent: 'center', alignItems: 'center', marginRight: 14, marginTop: 2 },
-  logMsg: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 6, lineHeight: 22 },
-  logMsgSingle: { color: colors.text, fontSize: 15, fontWeight: '600' },
-  logTime: { color: colors.subMuted, fontSize: 12, textAlign: 'right' },
-  logContent: { flex: 1, marginRight: 12 },
-  timeContainer: { width: 72, alignItems: 'flex-end', justifyContent: 'center' },
+  logIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: 'rgba(240, 110, 110, 0.1)', justifyContent: 'center', alignItems: 'center', marginRight: 14, marginTop: 2 },
+  logMsg: { color: colors.text, fontSize: 15, fontWeight: '600', marginBottom: 6, lineHeight: 22 },
+  logTime: { color: colors.subMuted, fontSize: 13 },
   emptyText: { color: colors.subMuted, textAlign: 'center', marginTop: 80, lineHeight: 22, fontSize: 15 },
   logsScrollArea: { flex: 1, paddingRight: 14 },
-  logSection: { width: '38%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl, minHeight: 380 },
-  // 新版橫向卡片樣式
-  logContent: { flex: 1, marginRight: 12 },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  rowBottom: { marginTop: 6 },
-  smallMeta: { color: colors.subMuted, fontSize: 12 },
-  userTag: { backgroundColor: 'rgba(255,110,110,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, marginBottom: 6 },
-  userTagText: { color: '#ff6e6e', fontWeight: '700' },
-  timeContainer: { width: 72, alignItems: 'flex-end', justifyContent: 'center' },
   settingCard: { 
     backgroundColor: colors.leftPanel, 
     borderRadius: radii.md, 
