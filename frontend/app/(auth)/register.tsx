@@ -1,10 +1,12 @@
 // app/(auth)/register.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
-import React, { useState, useRef } from 'react'; 
+import React, { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
+
+const BASE_URL = 'http://localhost:3000';
 
 export default function RegisterScreen() {
   const [nickname, setNickname] = useState('');
@@ -22,40 +24,67 @@ export default function RegisterScreen() {
   const confirmPasswordRef = useRef<TextInput>(null);
 
   const handleRegister = async () => {
-    if (!nickname || !account || !password || !confirmPassword) {
-      alert('請填寫完整資訊！');
+    // 💡 1. 加入 .trim() 濾除前後多餘的空白，避免使用者不小心輸入空白被誤判為有值
+    const trimmedNickname = nickname.trim();
+    const trimmedAccount = account.trim();
+    const trimmedPassword = password.trim();
+    const trimmedConfirm = confirmPassword.trim();
+
+    if (!trimmedNickname || !trimmedAccount || !trimmedPassword || !trimmedConfirm) {
+      alert('【前端檢查】請確認所有欄位都有輸入字元！');
       return;
     }
-    if (password !== confirmPassword) {
+    if (trimmedPassword !== trimmedConfirm) {
       alert('兩次密碼輸入不一致！');
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/register', {
+      const response = await fetch(`${BASE_URL}/api/register`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: account,
-          password: password,
-          nickname: nickname,
-          avatar: '' 
+          account: trimmedAccount, // 💡 2. 確保兼容後端可能預期的 account 欄位
+          username: trimmedAccount,
+          password: trimmedPassword,
+          confirmPassword: trimmedConfirm, // 💡 新增：很多後端會在 API 裡也要求檢查確認密碼
+          nickname: trimmedNickname,
+          name: trimmedNickname,   // 💡 新增：有些後端資料庫欄位可能叫 name
+          email: `${trimmedAccount}@example.com`, // 💡 新增：有些後端框架預設需要 email
+          phone: '0900000000', // 💡 新增：預防後端要求電話欄位
+          avatar: 'default.png' // 💡 修正：空字串 '' 在 NodeJS 裡會被 !avatar 誤判為「沒填」，改給預設字串
         }),
       });
 
-      const data = await response.json();
-
-      if (data.success) {
-        alert('註冊成功！');
-        router.replace('/(auth)/login'); 
-      } else {
-        alert(data.message || '註冊失敗');
+      // 💡 先以純文字讀取，避免後端回傳 HTML (例如 404 Cannot POST) 導致 JSON.parse 壞掉
+      const textResponse = await response.text();
+      try {
+        const data = JSON.parse(textResponse);
+        if (data.success) {
+          try {
+            // 儲存使用者識別到 AsyncStorage，讓 app 之後的請求都帶上 userId
+            if (data.user?.id) await AsyncStorage.setItem('userId', String(data.user.id));
+            if (data.user?.nickname) await AsyncStorage.setItem('userName', data.user.nickname);
+            if (data.user?.account) await AsyncStorage.setItem('loginAccount', data.user.account);
+            if (data.user?.avatar) await AsyncStorage.setItem('avatarUri', data.user.avatar);
+          } catch (e) {
+            console.warn('無法將 userId 儲存到 AsyncStorage', e);
+          }
+          alert('🎉 註冊成功，已自動登入！');
+          router.replace('/environment');
+        } else {
+          // 💡 標示為後端回傳，方便釐清是哪邊擋下的
+          alert(`【後端拒絕】${data.message || '註冊失敗'}`);
+        }
+      } catch (parseError) {
+        console.error("後端回傳的非 JSON 內容:", textResponse);
+        alert(`【伺服器錯誤 ${response.status}】\n請檢查後端是否有 /api/register 這個路由！`);
       }
     } catch (error) {
       console.error(error);
-      alert('網路連線失敗或伺服器未啟動');
+      alert('【連線失敗】無法連線。\n若使用實體手機測試，請將 BASE_URL 替換為電腦的區域網路 IP (如 192.168.X.X)。');
     }
   };
 

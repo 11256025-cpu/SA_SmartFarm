@@ -1,10 +1,12 @@
 // app/(auth)/login.tsx
-import { router } from 'expo-router';
-import React, { useRef, useState } from 'react'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router } from 'expo-router';
+import React, { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
+
+const BASE_URL = 'http://localhost:3000';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');
@@ -24,24 +26,27 @@ export default function LoginScreen() {
     setAccountError('');
     setPasswordError('');
 
-    if (!account || !password) {
+    const trimmedAccount = account.trim();
+    const trimmedPassword = password.trim();
+    if (!trimmedAccount || !trimmedPassword) {
       alert("請輸入帳號與密碼！");
       return;
     }
 
     try {
-      const response = await fetch('http://localhost:3000/api/login', {
+      const response = await fetch(`${BASE_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: account, 
-          password: password
+          username: trimmedAccount,
+          password: trimmedPassword
         })
       });
 
       const data = await response.json();
+      console.log('login response', response.status, data);
 
       if (data.success) {
         const userId = data.user?.user_id ?? data.user?.id ?? null;
@@ -59,7 +64,7 @@ export default function LoginScreen() {
 
         if (userId) {
           try {
-            const resp = await fetch(`http://localhost:3000/api/alerts/settings?userId=${userId}`);
+            const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${userId}`);
             const settingsData = await resp.json();
             if (settingsData.success && settingsData.settings) {
               const s = settingsData.settings;

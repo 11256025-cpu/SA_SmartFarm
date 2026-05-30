@@ -43,10 +43,14 @@ export default function EnvironmentScreen() {
   // 💡 4. 向後端請求使用者最新的設定 (已完成多使用者綁定)
   const fetchSettings = async () => {
     try {
-      let uid = await AsyncStorage.getItem('userId') || '1';
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) {
+        router.replace('/(auth)/login');
+        return;
+      }
       const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${uid}`);
       const data = await resp.json();
-      
+
       if (data.success && data.settings) {
         setThresholds({
           tempRange: data.settings.tempRange || [15, 35],
@@ -54,6 +58,18 @@ export default function EnvironmentScreen() {
           co2Range: data.settings.co2Range || [400, 1000],
           lightRange: data.settings.lightRange || [500, 50000]
         });
+      }
+
+      // 再抓一次使用者的排程設定，若有則覆蓋 frequency/duration
+      try {
+        const schedResp = await fetch(`${BASE_URL}/api/schedule?userId=${uid}`);
+        const schedData = await schedResp.json();
+        if (schedData.success && schedData.schedule) {
+          if (typeof schedData.schedule.frequency === 'number') setFrequency(schedData.schedule.frequency);
+          if (typeof schedData.schedule.duration === 'number') setDuration(schedData.schedule.duration);
+        }
+      } catch (e) {
+        console.warn('載入排程設定失敗', e);
       }
     } catch (error) {
       console.warn('載入警示設定失敗，使用預設值。', error);
@@ -63,7 +79,12 @@ export default function EnvironmentScreen() {
   // 💡 5. 優化：放開滑軌時，通知後端暫存目前最新數值的非同步方法 (補上 userId)
   const updateBackendSimulator = async (updatedValues: { temperature?: number; humidity?: number; co2?: number; light?: number }) => {
     try {
-      let uid = await AsyncStorage.getItem('userId') || '1'; // 👈 核心：獲取當前登入的使用者 ID
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) {
+        console.warn('未登入：無法更新模擬器，導回登入頁');
+        router.replace('/(auth)/login');
+        return;
+      }
 
       await fetch(`${BASE_URL}/api/simulator/update`, {
         method: 'POST',
@@ -173,7 +194,12 @@ export default function EnvironmentScreen() {
   // 💡 10. 優化：儲存排程連動資料庫 (補上 userId 隔離排程)
   const handleSaveSchedule = async () => {
     try {
-      let uid = await AsyncStorage.getItem('userId') || '1'; // 👈 核心：獲取當前登入的使用者 ID
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) {
+        alert('請先登入以儲存排程');
+        router.replace('/(auth)/login');
+        return;
+      }
 
       const response = await fetch(`${BASE_URL}/api/schedule`, {
         method: 'POST',

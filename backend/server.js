@@ -129,10 +129,11 @@ setInterval(() => {
                     const now = Date.now();
                     // 60秒內不重複發送同類型警報
                     if (!lastAlertTimes[alertKey] || now - lastAlertTimes[alertKey] > 60000) {
-                        const msg = `⚠️ ${type}異常！當前數值 ${value}${unit} (允許範圍: ${range[0]}~${range[1]})`;
+                        // 將使用者 id 加入警示文字，方便後續查閱與過濾
+                        const msg = `🚨 [警示觸發] 使用者 ${uid} ⚠️ ${type}異常！當前數值 ${value}${unit} (允許範圍: ${range[0]}~${range[1]})`;
                         db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [uid, msg]);
                         lastAlertTimes[alertKey] = now;
-                        console.log(`🚨 [警示觸發] ${msg}`);
+                        console.log(msg);
                     }
                 }
             };
@@ -165,7 +166,7 @@ app.get('/api/debug/history', (req, res) => {
 app.post('/api/simulator/update', (req, res) => {
     let { userId, temperature, humidity, co2, light } = req.body;
 
-    if (!userId) userId = "1";
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
     const uidStr = String(userId);
 
     if (!currentFarmStates[uidStr]) {
@@ -185,8 +186,7 @@ app.post('/api/simulator/update', (req, res) => {
 // 💡 3. 報表分頁查詢歷史數據 (🔥 終極相容防爆版)
 app.get('/api/reports/history', (req, res) => {
     let { startDate, endDate, date, userId } = req.query;
-
-    if (!userId) userId = "1";
+    if (!userId) return res.status(400).json({ success: false, historyData: [], message: "缺少 userId" });
     
     // 💡 核心相容轉換：如果前端傳過來的是舊版參數 date，我們自動幫它映射到 start 變數上
     const start = startDate || date;
@@ -238,18 +238,55 @@ app.post('/api/register', (req, res) => {
             if (err.message.includes('UNIQUE constraint failed: USER.account')) return res.status(409).json({ success: false, message: "這個帳號已經有人使用了，請換一個！" });
             return res.status(500).json({ success: false, message: "伺服器發生未知的錯誤" });
         }
+        // 註冊成功後，也在 currentFarmStates 為該使用者建立初始暫存
+        const newId = String(this.lastID);
+        if (!currentFarmStates[newId]) {
+            currentFarmStates[newId] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+            console.log(`🆕 註冊後已為使用者 ${newId} 建立初始暫存`);
+        }
         res.json({ success: true, message: "註冊成功！", user: { id: this.lastID, nickname: nickname, account: username } });
     });
 });
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
-    const sql = `SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ? AND password = ?`;
-    db.get(sql, [username, password], (err, row) => {
-        if (err) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
-        if (row) res.json({ success: true, message: "登入成功！", user: row });
-        else res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
-    });
+    if (!username || !password) return res.status(400).json({ success: false, message: "請輸入帳號與密碼" });
+
+    // 先檢查帳號是否存在，再確認密碼（方便除錯）
+    console.log(`[/api/login] incoming username='${username}', passwordLength=${password ? password.length : 0}`);
+        db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE account = ?`, [username], (err, row) => {
+            console.log('[/api/login] db.get callback, err=', err ? err.message : null, 'row=', row);
+            if (err) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
+            const handleNotFound = () => {
+                // 若輸入為純數字，嘗試以 rowid 或 id 查詢（支援直接輸入 userId 登入）
+                if (/^\d+$/.test(username)) {
+                    db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE rowid = ? OR id = ?`, [username, username], (err2, row2) => {
+                        console.log('[/api/login] second db.get callback by id, err=', err2 ? err2.message : null, 'row2=', row2);
+                        if (err2) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
+                        if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
+                        if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
+                        const uidStr2 = String(row2.id);
+                        if (!currentFarmStates[uidStr2]) {
+                            currentFarmStates[uidStr2] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+                            console.log(`🆕 已為使用者 ${uidStr2} 建立初始暫存`);
+                        }
+                        return res.json({ success: true, message: "登入成功！", user: row2 });
+                    });
+                } else {
+                    return res.status(404).json({ success: false, message: "帳號不存在" });
+                }
+            };
+
+            if (!row) return handleNotFound();
+            if (row.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
+            // 確保 currentFarmStates 為此使用者建立初始暫存
+            const uidStr = String(row.id);
+            if (!currentFarmStates[uidStr]) {
+                currentFarmStates[uidStr] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+                console.log(`🆕 已為使用者 ${uidStr} 建立初始暫存`);
+            }
+            res.json({ success: true, message: "登入成功！", user: row });
+        });
 });
 
 app.post('/api/alerts/settings', (req, res) => {
@@ -319,12 +356,24 @@ app.get('/api/alerts/logs', (req, res) => {
 
 app.post('/api/schedule', (req, res) => {
     const { userId, frequency, duration } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
     db.get(`SELECT * FROM schedule_settings WHERE user_id = ?`, [userId], (err, row) => {
         if (row) {
             db.run(`UPDATE schedule_settings SET frequency = ?, duration = ?, updated_at = datetime('now', '+8 hours') WHERE user_id = ?`, [frequency, duration, userId], () => res.json({ success: true }));
         } else {
             db.run(`INSERT INTO schedule_settings (user_id, frequency, duration, updated_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))`, [userId, frequency, duration], () => res.json({ success: true }));
         }
+    });
+});
+
+// 取得使用者的排程設定
+app.get('/api/schedule', (req, res) => {
+    const userId = req.query.userId;
+    if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
+    db.get(`SELECT user_id, frequency, duration, updated_at FROM schedule_settings WHERE user_id = ?`, [userId], (err, row) => {
+        if (err) return res.status(500).json({ success: false, message: '資料庫查詢錯誤' });
+        if (!row) return res.json({ success: true, schedule: null });
+        return res.json({ success: true, schedule: { frequency: Number(row.frequency), duration: Number(row.duration), updated_at: row.updated_at } });
     });
 });
 
