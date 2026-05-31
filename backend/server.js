@@ -131,6 +131,19 @@ let lastAutoIrrigationTimes = {}; // 紀錄自動灌溉執行時間，避免重�
 let lastEmptyStateLogTime = 0; // 避免空 state 日誌過於頻繁
 
 setInterval(() => {
+    // 💡 自動偵測：每 10 秒去資料庫檢查一次，如果有手動新增的使用者，立刻自動掛載，免重啟！
+    db.all(`SELECT id FROM USER`, [], (err, users) => {
+        if (!err && users) {
+            users.forEach(user => {
+                const uid = String(user.id);
+                if (!currentFarmStates[uid]) {
+                    console.log(`✨ [自動偵測] 發現資料庫有新使用者 ${uid}，已自動加入背景紀錄排程！`);
+                    initializeUserState(uid);
+                }
+            });
+        }
+    });
+
     const userIds = Object.keys(currentFarmStates);
 
     if (userIds.length === 0) {
@@ -191,8 +204,8 @@ setInterval(() => {
                         const msg = `🚨 [警示觸發] 使用者 ${uid} ⚠️ ${type}異常！當前數值 ${value}${unit} (允許範圍: ${range[0]}~${range[1]})`;
                         db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [uid, msg]);
                         lastAlertTimes[alertKey] = now;
-                    const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
-                    console.log(`[${timeStr}] ${msg}`);
+                        const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+                        console.log(`[${timeStr}] ${msg}`);
                     }
                 }
             };
@@ -226,12 +239,9 @@ setInterval(() => {
                 const due = now - lastRun >= intervalMinutes * 60000;
 
                 // 詳細排程檢查日誌，幫助診斷為何未觸發灌溉
-                try {
-                    const checkTime = new Date().toLocaleString('zh-TW', { hour12: false });
-                    console.log(`[${checkTime}] [排程檢查] 使用者 ${uid} | humidity=${state.humidity} | lower=${lower} | upper=${upper} | frequency=${intervalMinutes} | lastRun=${lastRun} | due=${due}`);
-                } catch (e) {
-                    // 忽略日誌錯誤
-                }
+                const checkTime = new Date().toLocaleString('zh-TW', { hour12: false });
+                console.log(`[${checkTime}] [排程檢查] 使用者 ${uid} | humidity=${state.humidity} | lower=${lower} | upper=${upper} | frequency=${intervalMinutes} | lastRun=${lastRun} | due=${due}`);
+
                 if (state.humidity < lower && due) {
                     const targetHumidity = Math.min(100, upper);
                     const newHumidity = Math.max(state.humidity, targetHumidity);
@@ -241,7 +251,7 @@ setInterval(() => {
                     db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
                         [uid, 'auto', targetHumidity, newHumidity, `humidity<${lower}`],
                         (err3) => {
-                        const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+                            const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
                             if (err3) {
                                 console.error(`[${timeStr}] ❌ 自動灌溉紀錄儲存失敗 (user ${uid}):`, err3.message);
                             } else {
@@ -412,15 +422,14 @@ app.post('/api/login', (req, res) => {
                 // 若輸入為純數字，嘗試以 rowid 或 id 查詢（支援直接輸入 userId 登入）
                 if (/^\d+$/.test(username)) {
                     db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE rowid = ? OR id = ?`, [username, username], (err2, row2) => {
-                        console.log('[/api/login] second db.get callback by id, err=', err2 ? err2.message : null, 'row2=', row2);
-                                if (err2) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
-                                if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
-                                if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
-                                const uidStr2 = String(row2.id);
-                                initializeUserState(uidStr2, (initErr) => {
-                                    if (initErr) console.error(`[/api/login] 初始化使用者 ${uidStr2} 狀態時錯誤:`, initErr.message);
-                                    return res.json({ success: true, message: "登入成功！", user: row2 });
-                                });
+                        if (err2) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
+                        if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
+                        if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
+                        const uidStr2 = String(row2.id);
+                        initializeUserState(uidStr2, (initErr) => {
+                            if (initErr) console.error(`[/api/login] 初始化使用者 ${uidStr2} 狀態時錯誤:`, initErr.message);
+                            return res.json({ success: true, message: "登入成功！", user: row2 });
+                        });
                     });
                 } else {
                     return res.status(404).json({ success: false, message: "帳號不存在" });
