@@ -2,7 +2,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
 
@@ -19,8 +19,18 @@ export default function LoginScreen() {
   // 💡 新增控制密碼是否可見的狀態（預設 false 代表隱藏、呈現星號）
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
+  // 💡 新增：控制「登入成功彈窗」的顯示狀態與內文
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+
   // 建立密碼輸入框的錨點
   const passwordInputRef = useRef<TextInput>(null);
+
+  // 💡 新增：關閉彈窗並跳轉頁面的函式
+  const handleCloseModalAndNavigate = () => {
+    setSuccessModalVisible(false);
+    router.replace('/environment');
+  };
 
   const handleLogin = async () => {
     setAccountError('');
@@ -62,28 +72,17 @@ export default function LoginScreen() {
           }
         }
 
-        if (userId) {
-          try {
-            const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${userId}`);
-            const settingsData = await resp.json();
-            if (settingsData.success && settingsData.settings) {
-              const s = settingsData.settings;
-              const temp = s.tempRange ? s.tempRange.join(', ') : '無';
-              const humid = s.humidRange ? s.humidRange.join(', ') : '無';
-              const co2 = s.co2Range ? s.co2Range.join(', ') : '無';
-              alert(`✅ 登入成功！\n上次儲存的設定：\n溫度: [${temp}]\n濕度: [${humid}]\nCO2: [${co2}]`);
-            } else {
-              alert('✅ 登入成功！\n使用者尚未有先前的設定。');
-            }
-          } catch (err) {
-            console.warn('取得上次設定失敗：', err);
-            alert('✅ 登入成功！\n但無法取得上次設定（請稍後再試）');
-          }
-        } else {
-          alert('✅ 登入成功！');
-        }
+        // 💡 修改處：簡化內文，只需要有「登入成功」
+        setSuccessMessage('🎉 登入成功！');
 
-        router.replace('/environment');
+        // 顯示自訂彈窗
+        setSuccessModalVisible(true);
+
+        // 💡 延遲 2.5 秒後自動執行關閉彈窗並跳轉
+        setTimeout(() => {
+          handleCloseModalAndNavigate();
+        }, 2500);
+
       } else {
         const msg = data.message || '';
         if (
@@ -155,7 +154,7 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>密碼</Text>
               
-              {/* 💡 這裡將密碼輸入框與眼球按鈕包在一起，使其方便做相對定位 */}
+              {/* 這裡將密碼輸入框與眼球按鈕包在一起，使其方便做相對定位 */}
               <View style={styles.passwordWrapper}>
                 <TextInput
                   ref={passwordInputRef} 
@@ -164,13 +163,13 @@ export default function LoginScreen() {
                   placeholderTextColor="#666"
                   value={password}
                   onChangeText={handlePasswordChange} 
-                  secureTextEntry={!isPasswordVisible} // 💡 動態切換顯示或隱藏
+                  secureTextEntry={!isPasswordVisible} // 動態切換顯示或隱藏
                   autoCapitalize="none"
                   returnKeyType="done"
                   onSubmitEditing={handleLogin}
                 />
                 
-                {/* 💡 核心新增：顯示/隱藏密碼的眼球圖標按鈕 */}
+                {/* 顯示/隱藏密碼的眼球圖標按鈕 */}
                 <TouchableOpacity 
                   style={styles.eyeIconContainer} 
                   onPress={() => setIsPasswordVisible(!isPasswordVisible)}
@@ -206,6 +205,29 @@ export default function LoginScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* 自訂暗色系登入成功彈窗 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={successModalVisible}
+        onRequestClose={handleCloseModalAndNavigate}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.iconCircle}>
+              <FontAwesome name="check" size={28} color="#FFFFFF" />
+            </View>
+            <Text style={styles.modalTitle}>系統提示</Text>
+            <Text style={styles.modalMessage}>{successMessage}</Text>
+            
+            <TouchableOpacity style={styles.modalButton} onPress={handleCloseModalAndNavigate}>
+              <Text style={styles.modalButtonText}>確 定</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -259,7 +281,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     fontWeight: '600',
   },
-  // 💡 新增：包裹密碼輸入框與眼球的容器
   passwordWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -277,11 +298,9 @@ const styles = StyleSheet.create({
     borderColor: '#33373E',
     width: '100%',
   },
-  // 💡 新增：密碼輸入框右側多預留一點寬度，避免輸入很長時字體穿透到眼球底下
   passwordInputSpecial: {
     paddingRight: 50, 
   },
-  // 💡 新增：眼球按鈕的定位控制（靠右居中）
   eyeIconContainer: {
     position: 'absolute',
     right: 16,
@@ -321,5 +340,58 @@ const styles = StyleSheet.create({
     color: '#5A8B73',
     fontSize: 14,
     fontWeight: '600',
+  },
+
+  // Modal 樣式
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    maxWidth: 320,
+    backgroundColor: '#1E2124',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#33373E',
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#5A8B73',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButton: {
+    backgroundColor: '#5A8B73',
+    paddingVertical: 12,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
