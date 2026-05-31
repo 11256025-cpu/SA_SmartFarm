@@ -1,15 +1,15 @@
+// environment.tsx
 import { FontAwesome } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // 💡 新增：用來拿取 userId
+import AsyncStorage from '@react-native-async-storage/async-storage'; 
 import Slider from '@react-native-community/slider';
-import { useFocusEffect } from '@react-navigation/native'; // 💡 新增：確保每次切換回此頁面都會重新抓資料
+import { useFocusEffect } from '@react-navigation/native'; 
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native'; // 💡 引入 Modal
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
-// 💡 自動判斷執行環境
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 export default function EnvironmentScreen() {
@@ -32,7 +32,11 @@ export default function EnvironmentScreen() {
 
   const slideAnim = useRef(new Animated.Value(400)).current; 
 
-  // 💡 3. 新增：警示閾值狀態 (預設先給寬鬆一點，等 API 回傳後覆蓋)
+  // 💡 新增：控制「儲存設定成功彈窗」的顯示狀態與內文
+  const [saveModalVisible, setSaveModalVisible] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
+
+  // 3. 警示閾值狀態 (預設先給寬鬆一點，等 API 回傳後覆蓋)
   const [thresholds, setThresholds] = useState({
     tempRange: [15, 35],
     humidRange: [30, 80],
@@ -40,7 +44,7 @@ export default function EnvironmentScreen() {
     lightRange: [500, 50000]
   });
 
-  // 💡 4. 向後端請求使用者最新的設定 (已完成多使用者綁定)
+  // 4. 向後端請求使用者最新的設定 (已完成多使用者綁定)
   const fetchSettings = async () => {
     try {
       const uid = await AsyncStorage.getItem('userId');
@@ -72,7 +76,7 @@ export default function EnvironmentScreen() {
         console.warn('載入排程設定失敗', e);
       }
 
-      // 再抓一次使用者的模擬器當前狀態（記憶體或最近一筆歷史紀錄），並覆蓋控制面板數值
+      // 再抓一次使用者的模擬器當前狀態，並覆蓋控制面板數值
       try {
         const stateResp = await fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`);
         const stateData = await stateResp.json();
@@ -83,7 +87,6 @@ export default function EnvironmentScreen() {
           if (s.co2 !== undefined) setCo2(Number(s.co2));
           if (s.light !== undefined) setLight(Number(s.light));
 
-          // 將載入的 server 值同步到本機保存，避免使用者看到跳動
           saveControlSettings({ temperature: Number(s.temperature), humidity: Number(s.humidity), co2: Number(s.co2), light: Number(s.light), frequency, duration });
         }
       } catch (e) {
@@ -94,7 +97,7 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 💡 5. 優化：放開滑軌時，通知後端暫存目前最新數值的非同步方法 (補上 userId)
+  // 5. 放開滑軌時，通知後端暫存目前最新數值的非同步方法
   const updateBackendSimulator = async (updatedValues: { temperature?: number; humidity?: number; co2?: number; light?: number }) => {
     try {
       const uid = await AsyncStorage.getItem('userId');
@@ -108,7 +111,7 @@ export default function EnvironmentScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          userId: uid, // 👈 核心：告訴後端這是「誰」在拉滑動條
+          userId: uid,
           ...updatedValues
         }),
       });
@@ -117,7 +120,7 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 💡 5.5 新增：保存控制面板設定值到 AsyncStorage
+  // 5.5 保存控制面板設定值到 AsyncStorage
   const saveControlSettings = async (settings: { temperature?: number; humidity?: number; co2?: number; light?: number; frequency?: number; duration?: number }) => {
     try {
       const currentSettings = await AsyncStorage.getItem('controlSettings');
@@ -129,7 +132,7 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 💡 5.6 新增：從 AsyncStorage 載入控制面板設定值
+  // 5.6 從 AsyncStorage 載入控制面板設定值
   const loadControlSettings = async () => {
     try {
       const savedSettings = await AsyncStorage.getItem('controlSettings');
@@ -149,42 +152,40 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 💡 6. 新增：頁面首次加載時或切回時載入保存的設定
+  // 6. 頁面首次加載時或切回時載入保存的設定
   useEffect(() => {
     if (!isLoaded) {
       loadControlSettings();
     }
   }, [isLoaded]);
 
-  // 💡 7. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
+  // 7. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
   useFocusEffect(
     useCallback(() => {
       fetchSettings();
     }, [])
   );
 
-  // 💡 7.5 新增：監聽控制面板值變化，自動保存到 AsyncStorage
+  // 7.5 監聽控制面板值變化，自動保存到 AsyncStorage
   useEffect(() => {
     if (isLoaded) {
-      // 💡 效能優化：使用 setTimeout 加入防抖 (Debounce) 機制
-      // 避免在拖曳滑軌時，每秒觸發數十次 AsyncStorage 寫入造成 UI 卡頓
       const timeoutId = setTimeout(() => {
         saveControlSettings({
           temperature, humidity, co2, light, frequency, duration
         });
-      }, 500); // 停止數值變動後 0.5 秒才執行寫入
+      }, 500); 
       
       return () => clearTimeout(timeoutId);
     }
   }, [temperature, humidity, co2, light, frequency, duration, isLoaded]);
 
-  // 💡 8. 共用的異常判斷小工具
+  // 8. 共用的異常判斷小工具
   const isWarning = (currentValue: number, range: number[]) => {
     if (!range || range.length !== 2) return false;
     return currentValue < range[0] || currentValue > range[1];
   };
 
-  // 💡 9. 異常判斷邏輯 (依賴 thresholds 的動態範圍)
+  // 9. 異常判斷邏輯
   useEffect(() => {
     const alerts: string[] = [];
     if (isWarning(temperature, thresholds.tempRange)) alerts.push('temperature');
@@ -194,9 +195,8 @@ export default function EnvironmentScreen() {
     
     setActiveAlerts(alerts);
     setShowWarning(alerts.length > 0);
-    // 當警示內容變更時，開啟通知顯示
     setHideNotification(false);
-  }, [temperature, humidity, co2, light, thresholds]); // 記得將 thresholds 加入依賴
+  }, [temperature, humidity, co2, light, thresholds]); 
 
   // 滑入動畫邏輯
   const isVisible = activeAlerts.length > 0 && !hideNotification;
@@ -209,12 +209,13 @@ export default function EnvironmentScreen() {
     }).start();
   }, [isVisible, slideAnim]);
 
-  // 💡 10. 優化：儲存排程連動資料庫 (補上 userId 隔離排程)
+  // 💡 10. 修改處：將原本內建的 alert 改為我們自訂的彈窗 (Modal)
   const handleSaveSchedule = async () => {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
-        alert('請先登入以儲存排程');
+        setSaveMessage('請先登入以儲存排程');
+        setSaveModalVisible(true);
         router.replace('/(auth)/login');
         return;
       }
@@ -223,7 +224,7 @@ export default function EnvironmentScreen() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          userId: uid, // 👈 核心：連同 user_id 一起送去，防止覆蓋其他人的排程
+          userId: uid, 
           frequency, 
           duration 
         }),
@@ -231,17 +232,21 @@ export default function EnvironmentScreen() {
 
       const data = await response.json();
       if (response.ok && data.success) {
-        alert('儲存成功！排程已同步至資料庫。');
+        // 💡 替換 alert，只顯示簡潔的儲存成功字樣
+        setSaveMessage('儲存成功！排程已同步至資料庫。');
+        setSaveModalVisible(true);
       } else {
-        alert(`儲存失敗: ${data.message || '未知錯誤'}`);
+        setSaveMessage(`儲存失敗: ${data.message || '未知錯誤'}`);
+        setSaveModalVisible(true);
       }
     } catch (error) {
       console.error('儲存排程時發生錯誤:', error);
-      alert('無法連接到後端伺服器，請檢查網路連線或確認後端服務已啟動。');
+      setSaveMessage('無法連接到後端伺服器，請檢查網路連線。');
+      setSaveModalVisible(true);
     }
   };
 
-  // 💡 11. 動態生成警示文案
+  // 11. 動態生成警示文案
   const getAlertContent = (type: string) => {
     switch (type) {
       case 'temperature':
@@ -277,7 +282,7 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 控制面板滑軌元件 (修正 TypeScript 型別報錯)
+  // 控制面板滑軌元件
   const renderSliderControl = (label: string, value: number, setter: (val: number) => void, min: number, max: number, unit: string, apiKey: 'temperature' | 'humidity' | 'co2' | 'light') => (
     <View style={styles.controlRow}>
       <View style={styles.controlLabelGroup}>
@@ -304,7 +309,6 @@ export default function EnvironmentScreen() {
   const pickerSelectStyles = StyleSheet.create({
     inputIOS: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
     inputAndroid: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent' },
-    // 💡 新增 as any 避免 TypeScript 檢查 Web 專屬的 CSS 屬性報錯
     inputWeb: { color: '#000000', paddingLeft: 12, paddingRight: 30, fontSize: typography.body, height: 36, backgroundColor: 'transparent', borderWidth: 0, outlineStyle: 'none', appearance: 'none', WebkitAppearance: 'none', MozAppearance: 'none', cursor: 'pointer' } as any,
     placeholder: { color: '#999999' },
     iconContainer: { top: 12, right: 10 },
@@ -438,13 +442,34 @@ export default function EnvironmentScreen() {
           </View>
         </Animated.View>
       )}
+
+      {/* 💡 核心新增：自訂暗色系儲存排程成功彈窗 */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={saveModalVisible}
+        onRequestClose={() => setSaveModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.iconCircle}>
+              <FontAwesome name="check" size={28} color="#FFFFFF" />
+            </View>
+            <Text style={styles.modalTitle}>系統提示</Text>
+            <Text style={styles.modalMessage}>{saveMessage}</Text>
+            
+            <TouchableOpacity style={styles.modalButton} onPress={() => setSaveModalVisible(false)}>
+              <Text style={styles.modalButtonText}>確 定</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
     </>
   );
 }
 
-// ⚠️ 原有 styles 排版維持不變，此處省略...
 const styles = StyleSheet.create({
-  // ... 維持你原本在底部的樣式表即可
   scrollContent: { flexGrow: 1, alignItems: 'center' },
   mainLayout: { flexDirection: 'row', width: '100%', maxWidth: 1200, padding: spacing.xxl },
   leftColumn: { flex: 1 },
@@ -503,4 +528,57 @@ const styles = StyleSheet.create({
   notificationPanelHeader: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold', marginBottom: spacing.md },
   notificationCard: { width: '100%', backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.md, marginBottom: spacing.md, alignItems: 'flex-start', minHeight: 80, justifyContent: 'space-between' },
   notificationButtonsRow: { flexDirection: 'row', marginTop: 10, width: '100%', alignItems: 'center' },
+
+  // 💡 追加新增的 Modal 樣式，沿用與登入頁完全一致的設計
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '80%',
+    maxWidth: 320,
+    backgroundColor: '#1E2124',
+    borderRadius: 16,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.border || '#33373E',
+  },
+  iconCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#5A8B73',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#FFFFFF',
+    fontWeight: '500',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  modalButton: {
+    backgroundColor: '#5A8B73',
+    paddingVertical: 12,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center',
+  },
+  modalButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });
