@@ -32,6 +32,7 @@ export default function ReportsScreen() {
     light: number[];
     co2: number[];
   }>({ labels: [], temp: [], humid: [], light: [], co2: [] });
+  const [irrigationData, setIrrigationData] = useState<{ labels: string[]; counts: number[]; totalCount: number; manualCount: number; autoCount: number }>({ labels: [], counts: [], totalCount: 0, manualCount: 0, autoCount: 0 });
 
   const fetchHistoryData = async () => {
     try {
@@ -78,8 +79,32 @@ export default function ReportsScreen() {
     }
   };
 
+  const fetchIrrigationStats = async () => {
+    try {
+      const userId = await AsyncStorage.getItem('userId') || '1';
+      const finalEndDate = endDate || startDate;
+      const response = await fetch(`${BASE_URL}/api/reports/irrigation-count?userId=${userId}&startDate=${startDate}&endDate=${finalEndDate}`);
+      const json = await response.json();
+      if (json.success) {
+        setIrrigationData({
+          labels: Array.isArray(json.labels) ? json.labels : [],
+          counts: Array.isArray(json.counts) ? json.counts : [],
+          totalCount: Number(json.totalCount) || 0,
+          manualCount: Number(json.manualCount) || 0,
+          autoCount: Number(json.autoCount) || 0,
+        });
+      } else {
+        setIrrigationData({ labels: [], counts: [], totalCount: 0, manualCount: 0, autoCount: 0 });
+      }
+    } catch (error) {
+      console.error('❌ 抓取灌溉統計失敗:', error);
+      setIrrigationData({ labels: [], counts: [], totalCount: 0, manualCount: 0, autoCount: 0 });
+    }
+  };
+
   useEffect(() => {
     fetchHistoryData();
+    fetchIrrigationStats();
   }, [startDate, endDate]);
 
   const handleDayPress = (day: DateData) => {
@@ -132,6 +157,7 @@ export default function ReportsScreen() {
     { key: 'humid', label: '土壤濕度圖 (%)', color: '#4C84FF', type: 'line' },
     { key: 'light', label: '光照強度圖 (lux)', color: '#F39C12', type: 'line' },
     { key: 'co2', label: '二氧化碳濃度 (ppm)', color: '#9B59B6', type: 'line' },
+    { key: 'irrigation', label: '灌溉次數統計', color: '#2ECC71', type: 'bar' },
   ];
 
   const onRightPanelLayout = (event: LayoutChangeEvent) => {
@@ -201,13 +227,16 @@ export default function ReportsScreen() {
               return (
                 <View key={key} style={styles.chartCard}>
                   <Text style={styles.chartTitle}>{opt.label}</Text>
+                  {opt.key === 'irrigation' && (
+                    <Text style={styles.chartSummary}>共執行灌溉 {irrigationData.totalCount} 次，手動 {irrigationData.manualCount} 次，自動 {irrigationData.autoCount} 次</Text>
+                  )}
                   
                   {/* 💡 根據型態動態渲染 LineChart 或 BarChart */}
                   {opt.type === 'bar' ? (
                     <BarChart
                       data={{
-                        labels: dbChartData.labels.filter(l => l !== ''), // 柱狀圖只留有文字的標籤才不會太空
-                        datasets: [{ data: (dbChartData[key as keyof typeof dbChartData] as number[]).filter(v => v > 0) || [] }]
+                        labels: opt.key === 'irrigation' ? irrigationData.labels : dbChartData.labels.filter(l => l !== ''),
+                        datasets: [{ data: opt.key === 'irrigation' ? irrigationData.counts : (dbChartData[key as keyof typeof dbChartData] as number[]).filter(v => v > 0) || [] }]
                       }}
                       width={chartWidth - 55}
                       height={220}
@@ -229,8 +258,6 @@ export default function ReportsScreen() {
                       width={chartWidth - 55}
                       height={220}
                       chartConfig={commonChartConfig}
-                      propsForHorizontalLabels={{ fontSize: 10 }}
-                      propsForVerticalLabels={{ fontSize: 10 }}
                       bezier
                     />
                   )}
@@ -256,5 +283,6 @@ const styles = StyleSheet.create({
   chartScrollContainer: { paddingBottom: 30 },
   chartCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.xl, marginBottom: spacing.lg, borderWidth: 1, borderColor: colors.border },
   chartTitle: { color: colors.text, fontSize: typography.large, fontWeight: 'bold', marginBottom: spacing.md },
+  chartSummary: { color: colors.subMuted, fontSize: typography.body, marginBottom: spacing.sm },
   noDataContainer: { height: 220, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: radii.md }
 });

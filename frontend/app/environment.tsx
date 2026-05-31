@@ -1,11 +1,11 @@
 // environment.tsx
 import { FontAwesome } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage'; 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
-import { useFocusEffect } from '@react-navigation/native'; 
+import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Platform, StyleSheet, Text, TouchableOpacity, View, Modal } from 'react-native'; // 💡 引入 Modal
+import { Animated, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // 💡 引入 Modal
 import RNPickerSelect from 'react-native-picker-select';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -22,6 +22,7 @@ export default function EnvironmentScreen() {
   // 2. 灌溉排程變數
   const [frequency, setFrequency] = useState(2);
   const [duration, setDuration] = useState(10);
+  const [targetHumidity, setTargetHumidity] = useState(60);
   
   const [showWarning, setShowWarning] = useState(false);
   const [activeAlerts, setActiveAlerts] = useState<string[]>([]);
@@ -120,13 +121,85 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 5.5 保存控制面板設定值到 AsyncStorage
-  const saveControlSettings = async (settings: { temperature?: number; humidity?: number; co2?: number; light?: number; frequency?: number; duration?: number }) => {
+  const handleManualIrrigation = async () => {
     try {
-      const currentSettings = await AsyncStorage.getItem('controlSettings');
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) {
+        setSaveMessage('請先登入後再執行手動灌溉');
+        setSaveModalVisible(true);
+        return;
+      }
+
+      const response = await fetch(`${BASE_URL}/api/irrigation/manual`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: uid, targetHumidity }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setHumidity(Number(data.newHumidity));
+        updateBackendSimulator({ humidity: Number(data.newHumidity) });
+        setSaveMessage(`手動灌溉成功，已將濕度調整至 ${data.newHumidity}% 並儲存紀錄。`);
+      } else {
+        setSaveMessage(`手動灌溉失敗：${data.message || '請稍後再試'}`);
+      }
+    } catch (error) {
+      console.error('手動灌溉失敗:', error);
+      setSaveMessage('無法連線到伺服器，請稍後再試。');
+    } finally {
+      setSaveModalVisible(true);
+    }
+  };
+
+  const handleAutoIrrigation = async () => {
+    try {
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) {
+        setSaveMessage('請先登入後再執行自動灌溉');
+        setSaveModalVisible(true);
+        return;
+      }
+
+      if (!thresholds.humidRange || humidity >= thresholds.humidRange[0]) {
+        setSaveMessage('土壤濕度已達標準，不需執行自動灌溉。');
+        setSaveModalVisible(true);
+        return;
+      }
+
+      const autoTargetHumidity = Math.min(100, thresholds.humidRange[1] || humidity + 20);
+      const response = await fetch(`${BASE_URL}/api/irrigation/auto`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: uid, targetHumidity: autoTargetHumidity }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setHumidity(Number(data.newHumidity));
+        updateBackendSimulator({ humidity: Number(data.newHumidity) });
+        setSaveMessage(`自動灌溉已執行並記錄：目標濕度 ${data.targetHumidity}%，目前濕度 ${data.newHumidity}%。`);
+      } else {
+        setSaveMessage(`自動灌溉失敗：${data.message || '請稍後再試'}`);
+      }
+    } catch (error) {
+      console.error('自動灌溉失敗:', error);
+      setSaveMessage('無法連線到伺服器，請稍後再試。');
+    } finally {
+      setSaveModalVisible(true);
+    }
+  };
+
+  // 5.5 保存控制面板設定值到 AsyncStorage
+  const getControlSettingsKey = (uid: string) => `controlSettings_${uid}`;
+
+  const saveControlSettings = async (settings: { temperature?: number; humidity?: number; co2?: number; light?: number; frequency?: number; duration?: number; targetHumidity?: number }) => {
+    try {
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) return;
+      const storageKey = getControlSettingsKey(uid);
+      const currentSettings = await AsyncStorage.getItem(storageKey);
       const existing = currentSettings ? JSON.parse(currentSettings) : {};
       const updated = { ...existing, ...settings };
-      await AsyncStorage.setItem('controlSettings', JSON.stringify(updated));
+      await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (error) {
       console.error('保存控制面板設定失敗:', error);
     }
@@ -135,7 +208,13 @@ export default function EnvironmentScreen() {
   // 5.6 從 AsyncStorage 載入控制面板設定值
   const loadControlSettings = async () => {
     try {
-      const savedSettings = await AsyncStorage.getItem('controlSettings');
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) {
+        setIsLoaded(true);
+        return;
+      }
+      const storageKey = getControlSettingsKey(uid);
+      const savedSettings = await AsyncStorage.getItem(storageKey);
       if (savedSettings) {
         const settings = JSON.parse(savedSettings);
         if (settings.temperature !== undefined) setTemperature(settings.temperature);
@@ -144,6 +223,7 @@ export default function EnvironmentScreen() {
         if (settings.light !== undefined) setLight(settings.light);
         if (settings.frequency !== undefined) setFrequency(settings.frequency);
         if (settings.duration !== undefined) setDuration(settings.duration);
+        if (settings.targetHumidity !== undefined) setTargetHumidity(settings.targetHumidity);
       }
     } catch (error) {
       console.error('載入控制面板設定失敗，使用預設值。', error);
@@ -171,7 +251,7 @@ export default function EnvironmentScreen() {
     if (isLoaded) {
       const timeoutId = setTimeout(() => {
         saveControlSettings({
-          temperature, humidity, co2, light, frequency, duration
+          temperature, humidity, co2, light, frequency, duration, targetHumidity
         });
       }, 500); 
       
@@ -344,10 +424,22 @@ export default function EnvironmentScreen() {
                 <View style={styles.cardValueContainer}>
                   <Text style={[styles.cardValue, isWarning(humidity, thresholds.humidRange) && styles.textAlert]}>{Math.round(humidity)} <Text style={styles.cardUnit}>%</Text></Text>
                 </View>
-                <TouchableOpacity style={styles.actionButton} onPress={() => {
-                  setHumidity(50);
-                  updateBackendSimulator({ humidity: 50 }); 
-                }}>
+                <View style={styles.targetRow}>
+                  <Text style={styles.targetLabel}>目標濕度</Text>
+                  <Text style={styles.targetValue}>{targetHumidity}%</Text>
+                </View>
+                <Slider
+                  style={styles.targetSlider}
+                  minimumValue={0}
+                  maximumValue={100}
+                  step={1}
+                  value={targetHumidity}
+                  minimumTrackTintColor={colors.primary}
+                  maximumTrackTintColor={colors.border}
+                  thumbTintColor={colors.primary}
+                  onValueChange={(value) => setTargetHumidity(Number(value))}
+                />
+                <TouchableOpacity style={styles.actionButton} onPress={handleManualIrrigation}>
                   <Text style={styles.actionButtonText}>手動灌溉</Text>
                 </TouchableOpacity>
               </View>
@@ -391,7 +483,10 @@ export default function EnvironmentScreen() {
               </View>
 
               <View style={styles.scheduleFooter}>
-                <TouchableOpacity style={styles.saveButton} onPress={handleSaveSchedule}>
+                <TouchableOpacity style={[styles.saveButton, styles.smallButton, styles.scheduleFooterButton]} onPress={handleAutoIrrigation}>
+                  <Text style={styles.saveButtonText}>依條件執行灌溉</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.saveButton, styles.scheduleFooterButton]} onPress={handleSaveSchedule}>
                   <Text style={styles.saveButtonText}>儲存設定</Text>
                 </TouchableOpacity>
               </View>
@@ -493,6 +588,10 @@ const styles = StyleSheet.create({
   textAlert: { color: colors.alert },
   actionButton: { backgroundColor: colors.secondary, paddingVertical: 8, borderRadius: radii.md, alignItems: 'center', width: '100%' },
   actionButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 13 },
+  targetRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.md },
+  targetLabel: { color: colors.subtle, fontSize: 13 },
+  targetValue: { color: colors.text, fontSize: 13, fontWeight: 'bold' },
+  targetSlider: { width: '100%', height: 34, marginTop: 10, marginBottom: 10 },
   horizontalDivider: { height: 1, backgroundColor: colors.border, marginVertical: spacing.md, width: '100%' },
   scheduleCard: { backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.xl },
   scheduleTitle: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold', marginBottom: spacing.lg },
@@ -500,8 +599,10 @@ const styles = StyleSheet.create({
   scheduleLabel: { color: colors.subtle, fontSize: 16, width: 80 },
   scheduleText: { color: colors.text, fontSize: typography.body, marginHorizontal: 8 },
   pickerWrapper: { backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: '#64748B', minWidth: 80, height: 36, justifyContent: 'center', overflow: 'hidden' },
-  scheduleFooter: { marginTop: 10, alignItems: 'flex-end', width: '100%' },
-  saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md },
+  scheduleFooter: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
+  saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md, flex: 1 },
+  scheduleFooterButton: { minWidth: 140 },
+  smallButton: { marginRight: 10, backgroundColor: colors.primary },
   saveButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
   godPanelHeader: { color: colors.text, fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
   godPanelSub: { color: colors.subMuted, fontSize: typography.small, marginBottom: 30 },

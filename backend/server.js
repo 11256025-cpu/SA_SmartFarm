@@ -11,9 +11,8 @@ app.use(express.json({ limit: '10mb' }));
 // ==========================================
 // 💡 模擬環境變數記憶體暫存區 (全域變數)
 // ==========================================
-let currentFarmStates = {
-    "1": { temperature: 25, humidity: 25, co2: 800, light: 100000 }
-};
+// 初始不預先建立任何使用者狀態，避免未登入就自動觸發定時寫入
+let currentFarmStates = {};
 
 // --- 連線到 SQLite 資料庫 ---
 const db = new sqlite3.Database('./farm.db', (err) => {
@@ -56,7 +55,18 @@ function initializeDatabase() {
             record_time TEXT
         )`);
 
-        // 4. 建立使用者表 (配合你的 /api/login 和 /api/register)
+        // 4. 建立灌溉紀錄表：手動/自動灌溉事件都會記錄
+        db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION_LOGS (
+            irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id TEXT,
+            irrigation_type TEXT,
+            target_humidity REAL,
+            new_humidity REAL,
+            condition TEXT,
+            record_time TEXT
+        )`);
+
+        // 5. 建立使用者表 (配合你的 /api/login 和 /api/register)
         db.run(`CREATE TABLE IF NOT EXISTS USER (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nickname TEXT,
@@ -74,18 +84,64 @@ function initializeDatabase() {
         )`);
 
         console.log("📋 資料庫資料表檢查與初始化完成！");
+        preloadAllUsersState(); // 💡 伺服器啟動時，自動把所有使用者載入記憶體
     });
 }
+
+function preloadAllUsersState() {
+    db.all(`SELECT id FROM USER`, [], (err, users) => {
+        if (err) return console.error("❌ 預載使用者資料失敗:", err.message);
+        if (users && users.length > 0) {
+            users.forEach(user => initializeUserState(String(user.id)));
+            console.log(`🚀 伺服器啟動：已自動掛載 ${users.length} 位使用者的狀態至記憶體！開始自動背景紀錄...`);
+        }
+    });
+}
+
+// ==========================================
+// 💡 使用者狀態初始化輔助函數
+// ==========================================
+const initializeUserState = (uid, callback) => {
+    if (currentFarmStates[uid]) {
+        return callback && callback(null, currentFarmStates[uid]);
+    }
+    db.get(`SELECT history_temp as temperature, history_soil_moisture as humidity, history_co2 as co2, history_light as light FROM HISTORY WHERE user_id = ? ORDER BY record_time DESC LIMIT 1`, [uid], (err, row) => {
+        if (err) return callback && callback(err);
+        if (row) {
+            currentFarmStates[uid] = {
+                temperature: Number(row.temperature),
+                humidity: Number(row.humidity),
+                co2: Number(row.co2),
+                light: Number(row.light)
+            };
+            console.log(`[${new Date().toLocaleString('zh-TW', { hour12: false })}] 🔄 成功從 HISTORY 還原使用者 ${uid} 的環境狀態暫存`);
+        } else {
+            currentFarmStates[uid] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+            console.log(`[${new Date().toLocaleString('zh-TW', { hour12: false })}] 🔄 為使用者 ${uid} 建立預設環境狀態暫存`);
+        }
+        return callback && callback(null, currentFarmStates[uid]);
+    });
+};
 
 // ==========================================
 // 💡 背景自動寫入機制 (每 10 秒自動紀錄)
 // ==========================================
 let lastAlertTimes = {}; // 紀錄各類警報最後發送時間，避免洗版 { "1_temp": timestamp }
+let lastAutoIrrigationTimes = {}; // 紀錄自動灌溉執行時間，避免重複觸發
+let lastEmptyStateLogTime = 0; // 避免空 state 日誌過於頻繁
 
 setInterval(() => {
     const userIds = Object.keys(currentFarmStates);
 
-    if (userIds.length === 0) return;
+    if (userIds.length === 0) {
+        const now = Date.now();
+        if (now - lastEmptyStateLogTime >= 60000) {
+            const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+            console.log(`[${timeStr}] ℹ️ 目前 currentFarmStates 為空，暫無歷史數據可寫入。請登入或啟動模擬器以開始保存環境數據。`);
+            lastEmptyStateLogTime = now;
+        }
+        return;
+    }
 
     userIds.forEach((uid) => {
         const state = currentFarmStates[uid];
@@ -103,10 +159,12 @@ setInterval(() => {
             state.light,
             state.co2
         ], (err) => {
+            const now = new Date().toLocaleString('zh-TW', { hour12: false });
             if (err) {
-                console.error(`❌ 定時寫入使用者 ${uid} 失敗:`, err.message);
+                console.error(`[${now}] ❌ 定時寫入使用者 ${uid} 失敗:`, err.message);
             } else {
-                console.log(`🕒 [定時紀錄] 成功幫使用者 ${uid} 寫入歷史數據:`, state);
+                const stateStr = `{ temperature: \x1b[33m${state.temperature}\x1b[0m, humidity: \x1b[33m${state.humidity}\x1b[0m, co2: \x1b[33m${state.co2}\x1b[0m, light: \x1b[33m${state.light}\x1b[0m }`;
+                console.log(`[${now}] 🕒 [定時紀錄] 成功幫使用者 ${uid} 寫入歷史數據: ${stateStr}`);
             }
         });
 
@@ -133,7 +191,8 @@ setInterval(() => {
                         const msg = `🚨 [警示觸發] 使用者 ${uid} ⚠️ ${type}異常！當前數值 ${value}${unit} (允許範圍: ${range[0]}~${range[1]})`;
                         db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [uid, msg]);
                         lastAlertTimes[alertKey] = now;
-                        console.log(msg);
+                    const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+                    console.log(`[${timeStr}] ${msg}`);
                     }
                 }
             };
@@ -142,6 +201,64 @@ setInterval(() => {
             checkAndAlert('土壤濕度', state.humidity, row.soil_warning, '%');
             checkAndAlert('二氧化碳', state.co2, row.co2_warning, 'ppm');
             checkAndAlert('光照強度', state.light, row.light_warning, 'lux');
+
+            // 自動灌溉排程：當土壤濕度低於設定下限時，按照使用者排程觸發一次灌溉
+            db.get(`SELECT * FROM schedule_settings WHERE user_id = ?`, [uid], (err2, scheduleRow) => {
+                if (err2 || !scheduleRow) return;
+
+                const intervalMinutes = Number(scheduleRow.frequency) || 0;
+                if (intervalMinutes <= 0) return;
+
+                let range;
+                try {
+                    range = JSON.parse(row.soil_warning);
+                } catch (e) {
+                    range = row.soil_warning ? row.soil_warning.split(',').map(Number) : null;
+                }
+                if (!Array.isArray(range) || range.length < 2) return;
+
+                const lower = Number(range[0]);
+                const upper = Number(range[1]);
+                if (isNaN(lower) || isNaN(upper)) return;
+
+                const now = Date.now();
+                const lastRun = lastAutoIrrigationTimes[uid] || 0;
+                const due = now - lastRun >= intervalMinutes * 60000;
+
+                // 詳細排程檢查日誌，幫助診斷為何未觸發灌溉
+                try {
+                    const checkTime = new Date().toLocaleString('zh-TW', { hour12: false });
+                    console.log(`[${checkTime}] [排程檢查] 使用者 ${uid} | humidity=${state.humidity} | lower=${lower} | upper=${upper} | frequency=${intervalMinutes} | lastRun=${lastRun} | due=${due}`);
+                } catch (e) {
+                    // 忽略日誌錯誤
+                }
+                if (state.humidity < lower && due) {
+                    const targetHumidity = Math.min(100, upper);
+                    const newHumidity = Math.max(state.humidity, targetHumidity);
+                    currentFarmStates[uid].humidity = newHumidity;
+                    lastAutoIrrigationTimes[uid] = now;
+
+                    db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
+                        [uid, 'auto', targetHumidity, newHumidity, `humidity<${lower}`],
+                        (err3) => {
+                        const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+                            if (err3) {
+                                console.error(`[${timeStr}] ❌ 自動灌溉紀錄儲存失敗 (user ${uid}):`, err3.message);
+                            } else {
+                                // 讀取今日灌溉次數並列印詳細資訊（包含使用者排程 frequency/duration）
+                                db.get(`SELECT COUNT(*) AS total FROM IRRIGATION_LOGS WHERE user_id = ? AND DATE(record_time) = DATE('now', '+8 hours')`, [uid], (countErr, countRow) => {
+                                    const todayCount = countErr ? 'unknown' : countRow.total;
+                                    const freq = intervalMinutes || (scheduleRow && scheduleRow.frequency) || 'n/a';
+                                    const dur = (scheduleRow && scheduleRow.duration) || 'n/a';
+                                    const nextRun = new Date(Date.now() + (Number(freq) * 60000));
+                                    const nextRunStr = isNaN(nextRun.getTime()) ? 'n/a' : nextRun.toLocaleString('zh-TW', { hour12: false });
+                                    console.log(`[${timeStr}] 💧 [自動灌溉] 使用者 ${uid} 已執行灌溉 (頻率: ${freq} 分鐘, 時長: ${dur} 分鐘) 目標濕度: ${targetHumidity}%, 新濕度: ${newHumidity}%, 今日灌溉次數: ${todayCount}, 下一次預計: ${nextRunStr}`);
+                                });
+                            }
+                        }
+                    );
+                }
+            });
         });
     });
 }, 10000); 
@@ -186,6 +303,8 @@ app.get('/api/simulator/state', (req, res) => {
         };
         // 初始化記憶體狀態，後續可被模擬器更新
         currentFarmStates[uid] = state;
+        const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+        console.log(`[${timeStr}] 🔄 從 HISTORY 初始化使用者 ${uid} 的 currentFarmStates: ${JSON.stringify(state)}`);
         return res.json({ success: true, state });
     });
 });
@@ -206,7 +325,10 @@ app.post('/api/simulator/update', (req, res) => {
     if (co2 !== undefined) currentFarmStates[uidStr].co2 = Number(co2);
     if (light !== undefined) currentFarmStates[uidStr].light = Number(light);
 
-    console.log(`🎛️ 使用者 ${uidStr} 更新了控制面板暫存:`, currentFarmStates[uidStr]);
+    const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+    const state = currentFarmStates[uidStr];
+    const coloredStateStr = `{ temperature: \x1b[33m${state.temperature}\x1b[0m, humidity: \x1b[33m${state.humidity}\x1b[0m, co2: \x1b[33m${state.co2}\x1b[0m, light: \x1b[33m${state.light}\x1b[0m }`;
+    console.log(`[${timeStr}] 🎛️ 使用者 ${uidStr} 更新了控制面板暫存: ${coloredStateStr}`);
 
     res.json({ success: true, currentState: currentFarmStates[uidStr] });
 });
@@ -278,6 +400,8 @@ app.post('/api/register', (req, res) => {
 
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
+    const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+    console.log(`[${timeStr}] 🔐 /api/login request received for username=${username}`);
     if (!username || !password) return res.status(400).json({ success: false, message: "請輸入帳號與密碼" });
 
     // 先檢查帳號是否存在，再確認密碼（debug 日誌已縮減）
@@ -293,10 +417,10 @@ app.post('/api/login', (req, res) => {
                                 if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
                                 if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
                                 const uidStr2 = String(row2.id);
-                                if (!currentFarmStates[uidStr2]) {
-                                    currentFarmStates[uidStr2] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
-                                }
-                        return res.json({ success: true, message: "登入成功！", user: row2 });
+                                initializeUserState(uidStr2, (initErr) => {
+                                    if (initErr) console.error(`[/api/login] 初始化使用者 ${uidStr2} 狀態時錯誤:`, initErr.message);
+                                    return res.json({ success: true, message: "登入成功！", user: row2 });
+                                });
                     });
                 } else {
                     return res.status(404).json({ success: false, message: "帳號不存在" });
@@ -305,13 +429,11 @@ app.post('/api/login', (req, res) => {
 
             if (!row) return handleNotFound();
             if (row.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
-            // 確保 currentFarmStates 為此使用者建立初始暫存
             const uidStr = String(row.id);
-            if (!currentFarmStates[uidStr]) {
-                currentFarmStates[uidStr] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
-                console.log(`🆕 已為使用者 ${uidStr} 建立初始暫存`);
-            }
-            res.json({ success: true, message: "登入成功！", user: row });
+            initializeUserState(uidStr, (initErr) => {
+                if (initErr) console.error(`[/api/login] 初始化使用者 ${uidStr} 狀態時錯誤:`, initErr.message);
+                return res.json({ success: true, message: "登入成功！", user: row });
+            });
         });
 });
 
@@ -368,6 +490,93 @@ app.post('/api/alerts/logs', (req, res) => {
     db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [userId, message], function(err) {
         if (err) return res.status(500).json({ success: false, message: "新增紀錄失敗" });
         res.json({ success: true, message: "新增紀錄成功", id: this.lastID });
+    });
+});
+
+app.post('/api/irrigation/manual', (req, res) => {
+    const { userId, targetHumidity } = req.body;
+    if (!userId || targetHumidity === undefined) return res.status(400).json({ success: false, message: "缺少必要參數" });
+    const uid = String(userId);
+    const target = Number(targetHumidity);
+    if (isNaN(target) || target < 0 || target > 100) return res.status(400).json({ success: false, message: "目標濕度需介於 0~100" });
+
+    if (!currentFarmStates[uid]) {
+        currentFarmStates[uid] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+    }
+
+    const currentHumidity = Number(currentFarmStates[uid].humidity || 0);
+    const newHumidity = target > currentHumidity ? target : currentHumidity;
+    currentFarmStates[uid].humidity = newHumidity;
+
+    db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
+        [uid, 'manual', target, newHumidity, `manual target ${target}`], function(err) {
+            if (err) return res.status(500).json({ success: false, message: "儲存灌溉紀錄失敗" });
+            db.get(`SELECT COUNT(*) AS total FROM IRRIGATION_LOGS WHERE user_id = ? AND DATE(record_time) = DATE('now', '+8 hours')`, [uid], (countErr, countRow) => {
+                const todayCount = countErr ? 'unknown' : countRow.total;
+                const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+                console.log(`[${timeStr}] 💧 [灌溉紀錄] 成功幫使用者 ${uid} 進行手動灌溉 今日灌溉次數：${todayCount}`);
+            });
+            res.json({ success: true, message: "手動灌溉紀錄已儲存", targetHumidity: target, newHumidity });
+        }
+    );
+});
+
+app.post('/api/irrigation/auto', (req, res) => {
+    const { userId, targetHumidity } = req.body;
+    if (!userId) return res.status(400).json({ success: false, message: "缺少使用者 ID" });
+    const uid = String(userId);
+    if (!currentFarmStates[uid]) {
+        currentFarmStates[uid] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
+    }
+
+    const currentHumidity = Number(currentFarmStates[uid].humidity || 0);
+    const target = targetHumidity !== undefined ? Number(targetHumidity) : currentHumidity;
+    if (isNaN(target) || target < 0 || target > 100) return res.status(400).json({ success: false, message: "目標濕度需介於 0~100" });
+
+    const newHumidity = target > currentHumidity ? target : currentHumidity;
+    currentFarmStates[uid].humidity = newHumidity;
+    lastAutoIrrigationTimes[uid] = Date.now();
+
+    db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
+        [uid, 'auto', target, newHumidity, `manual trigger or schedule`], function(err) {
+            if (err) return res.status(500).json({ success: false, message: "儲存自動灌溉紀錄失敗" });
+            db.get(`SELECT COUNT(*) AS total FROM IRRIGATION_LOGS WHERE user_id = ? AND DATE(record_time) = DATE('now', '+8 hours')`, [uid], (countErr, countRow) => {
+                const todayCount = countErr ? 'unknown' : countRow.total;
+                const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+                console.log(`[${timeStr}] 💧 [灌溉紀錄] 成功幫使用者 ${uid} 進行自動灌溉 今日灌溉次數：${todayCount}`);
+            });
+            res.json({ success: true, message: "自動灌溉紀錄已儲存", targetHumidity: target, newHumidity });
+        }
+    );
+});
+
+app.get('/api/reports/irrigation-count', (req, res) => {
+    const userId = req.query.userId;
+    const startDate = req.query.startDate;
+    const endDate = req.query.endDate || startDate;
+    if (!userId || !startDate) return res.status(400).json({ success: false, message: '缺少必要參數' });
+
+    const fromDate = startDate;
+    const toDate = endDate || startDate;
+    const sql = `
+        SELECT substr(record_time, 1, 10) as date,
+               COUNT(*) as count,
+               SUM(CASE WHEN irrigation_type = 'manual' THEN 1 ELSE 0 END) as manual_count,
+               SUM(CASE WHEN irrigation_type = 'auto' THEN 1 ELSE 0 END) as auto_count
+        FROM IRRIGATION_LOGS
+        WHERE user_id = ? AND substr(record_time, 1, 10) BETWEEN ? AND ?
+        GROUP BY date
+        ORDER BY date ASC
+    `;
+
+    db.all(sql, [String(userId), fromDate, toDate], (err, rows) => {
+        if (err) return res.status(500).json({ success: false, message: '查詢灌溉統計失敗' });
+        const labels = rows.map(row => row.date);
+        const counts = rows.map(row => Number(row.count));
+        const totalCount = counts.reduce((sum, cur) => sum + cur, 0);
+        const manualCount = rows.reduce((sum, row) => sum + Number(row.manual_count || 0), 0);
+        const autoCount = rows.reduce((sum, row) => sum + Number(row.auto_count || 0), 0);
+        res.json({ success: true, labels, counts, totalCount, manualCount, autoCount });
     });
 });
 

@@ -2,11 +2,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
 
-const BASE_URL = 'http://localhost:3000';
+const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 export default function LoginScreen() {
   const [account, setAccount] = useState('');

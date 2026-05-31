@@ -36,7 +36,18 @@ db.serialize(() => {
         record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
     )`);
 
-    // 4. 建立 HISTORY 表格 (歷史數據)
+    // 4. 建立 IRRIGATION_LOGS 表格 (灌溉紀錄)
+    db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION_LOGS (
+        irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id TEXT,
+        irrigation_type TEXT,
+        target_humidity REAL,
+        new_humidity REAL,
+        condition TEXT,
+        record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
+    )`);
+
+    // 5. 建立 HISTORY 表格 (歷史數據)
     db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id TEXT,
