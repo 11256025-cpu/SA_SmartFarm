@@ -105,15 +105,6 @@ export default function PageShell({ left, center, right, children, active, showN
     }
   };
 
-  const prevNotificationCountRef = React.useRef(notifications.length);
-
-  useEffect(() => {
-    if (notifications.length > prevNotificationCountRef.current && !panelVisible) {
-      openPanel();
-    }
-    prevNotificationCountRef.current = notifications.length;
-  }, [notifications.length, panelVisible, openPanel]);
-
   const loadWarningAlerts = async () => {
     try {
       const uid = (await AsyncStorage.getItem('userId')) || '1';
@@ -150,6 +141,28 @@ export default function PageShell({ left, center, right, children, active, showN
       return [];
     }
   };
+
+  const prevNotificationCountRef = React.useRef(notifications.length);
+  const autoCloseTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    // 當通知數量增加時，自動打開面板
+    if (notifications.length > prevNotificationCountRef.current && !panelVisible) {
+      openPanel();
+      
+      // 清除之前的計時器
+      if (autoCloseTimerRef.current) {
+        clearTimeout(autoCloseTimerRef.current);
+      }
+      
+      // 3秒後自動收起
+      autoCloseTimerRef.current = setTimeout(() => {
+        closePanel();
+      }, 3000);
+    }
+    
+    prevNotificationCountRef.current = notifications.length;
+  }, [notifications.length, panelVisible, openPanel, closePanel]);
 
   useFocusEffect(
     useCallback(() => {
