@@ -4,13 +4,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from '@react-native-community/slider';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native'; // 💡 引入 Modal
+import { useCallback, useEffect, useState } from 'react';
+import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
+import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
-const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
+const BASE_URL = Platform.OS === 'android'
+  ? 'http://10.0.2.2:3000'
+  : Platform.OS === 'web' && typeof window !== 'undefined'
+    ? `http://${window.location.hostname}:3000`
+    : 'http://localhost:3000';
 
 export default function EnvironmentScreen() {
   // 1. 環境狀態變數 (控制面板的當前數值)
@@ -23,15 +28,11 @@ export default function EnvironmentScreen() {
   const [frequency, setFrequency] = useState(2);
   const [duration, setDuration] = useState(10);
   const [targetHumidity, setTargetHumidity] = useState(60);
-  
-  const [showWarning, setShowWarning] = useState(false);
-  const [activeAlerts, setActiveAlerts] = useState<string[]>([]);
-  const [hideNotification, setHideNotification] = useState(false);
+  const { addNotification } = useNotifications();
+  const [activeThresholdAlerts, setActiveThresholdAlerts] = useState<string[]>([]);
   
   // 3. 追蹤是否已載入儲存的設定 (避免多次保存)
   const [isLoaded, setIsLoaded] = useState(false);
-
-  const slideAnim = useRef(new Animated.Value(400)).current; 
 
   // 💡 新增：控制「儲存設定成功彈窗」的顯示狀態與內文
   const [saveModalVisible, setSaveModalVisible] = useState(false);
@@ -140,12 +141,30 @@ export default function EnvironmentScreen() {
         setHumidity(Number(data.newHumidity));
         updateBackendSimulator({ humidity: Number(data.newHumidity) });
         setSaveMessage(`手動灌溉成功，已將濕度調整至 ${data.newHumidity}% 並儲存紀錄。`);
+        addNotification({
+          title: '手動灌溉成功',
+          message: `濕度已調整至 ${data.newHumidity}% 並儲存紀錄。`,
+          type: 'success',
+          action: () => router.replace('/environment'),
+        });
       } else {
-        setSaveMessage(`手動灌溉失敗：${data.message || '請稍後再試'}`);
+        const message = `手動灌溉失敗：${data.message || '請稍後再試'}`;
+        setSaveMessage(message);
+        addNotification({
+          title: '手動灌溉失敗',
+          message,
+          type: 'error',
+        });
       }
     } catch (error) {
       console.error('手動灌溉失敗:', error);
-      setSaveMessage('無法連線到伺服器，請稍後再試。');
+      const message = '無法連線到伺服器，請稍後再試。';
+      setSaveMessage(message);
+      addNotification({
+        title: '手動灌溉失敗',
+        message,
+        type: 'error',
+      });
     } finally {
       setSaveModalVisible(true);
     }
@@ -155,13 +174,25 @@ export default function EnvironmentScreen() {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
-        setSaveMessage('請先登入後再執行自動灌溉');
+        const message = '請先登入後再執行自動灌溉';
+        setSaveMessage(message);
+        addNotification({
+          title: '自動灌溉未執行',
+          message,
+          type: 'warning',
+        });
         setSaveModalVisible(true);
         return;
       }
 
       if (!thresholds.humidRange || humidity >= thresholds.humidRange[0]) {
-        setSaveMessage('土壤濕度已達標準，不需執行自動灌溉。');
+        const message = '土壤濕度已達標準，不需執行自動灌溉。';
+        setSaveMessage(message);
+        addNotification({
+          title: '自動灌溉未觸發',
+          message,
+          type: 'info',
+        });
         setSaveModalVisible(true);
         return;
       }
@@ -176,13 +207,32 @@ export default function EnvironmentScreen() {
       if (response.ok && data.success) {
         setHumidity(Number(data.newHumidity));
         updateBackendSimulator({ humidity: Number(data.newHumidity) });
-        setSaveMessage(`自動灌溉已執行並記錄：目標濕度 ${data.targetHumidity}%，目前濕度 ${data.newHumidity}%。`);
+        const message = `自動灌溉已執行並記錄：目標濕度 ${data.targetHumidity}%，目前濕度 ${data.newHumidity}%。`;
+        setSaveMessage(message);
+        addNotification({
+          title: '自動灌溉成功',
+          message,
+          type: 'success',
+          action: () => router.replace('/environment'),
+        });
       } else {
-        setSaveMessage(`自動灌溉失敗：${data.message || '請稍後再試'}`);
+        const message = `自動灌溉失敗：${data.message || '請稍後再試'}`;
+        setSaveMessage(message);
+        addNotification({
+          title: '自動灌溉失敗',
+          message,
+          type: 'error',
+        });
       }
     } catch (error) {
       console.error('自動灌溉失敗:', error);
-      setSaveMessage('無法連線到伺服器，請稍後再試。');
+      const message = '無法連線到伺服器，請稍後再試。';
+      setSaveMessage(message);
+      addNotification({
+        title: '自動灌溉失敗',
+        message,
+        type: 'error',
+      });
     } finally {
       setSaveModalVisible(true);
     }
@@ -202,6 +252,31 @@ export default function EnvironmentScreen() {
       await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (error) {
       console.error('保存控制面板設定失敗:', error);
+    }
+  };
+
+  const getEnvironmentAlertContent = (type: 'temperature' | 'humidity' | 'co2' | 'light') => {
+    switch (type) {
+      case 'temperature':
+        return {
+          title: '溫度超出範圍',
+          message: `目前溫度 ${Math.round(temperature)}°C，不在允許範圍 ${thresholds.tempRange[0]}~${thresholds.tempRange[1]}°C。`, 
+        };
+      case 'humidity':
+        return {
+          title: '濕度超出範圍',
+          message: `目前濕度 ${Math.round(humidity)}%，不在允許範圍 ${thresholds.humidRange[0]}~${thresholds.humidRange[1]}%。`, 
+        };
+      case 'co2':
+        return {
+          title: 'CO₂ 濃度超出範圍',
+          message: `目前 CO₂ ${Math.round(co2)} ppm，不在允許範圍 ${thresholds.co2Range[0]}~${thresholds.co2Range[1]} ppm。`, 
+        };
+      case 'light':
+        return {
+          title: '光照超出範圍',
+          message: `目前光照 ${Math.round(light).toLocaleString()} lux，不在允許範圍 ${thresholds.lightRange[0]}~${thresholds.lightRange[1]} lux。`, 
+        };
     }
   };
 
@@ -257,37 +332,36 @@ export default function EnvironmentScreen() {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [temperature, humidity, co2, light, frequency, duration, isLoaded]);
+  }, [temperature, humidity, co2, light, frequency, duration, targetHumidity, isLoaded]);
+
+  // 7.8 若環境數值超出警示範圍，立即寫入通知中心
+  useEffect(() => {
+    if (!isLoaded) return;
+    const currentAlerts: ('temperature' | 'humidity' | 'co2' | 'light')[] = [];
+    if (isWarning(temperature, thresholds.tempRange)) currentAlerts.push('temperature');
+    if (isWarning(humidity, thresholds.humidRange)) currentAlerts.push('humidity');
+    if (isWarning(co2, thresholds.co2Range)) currentAlerts.push('co2');
+    if (isWarning(light, thresholds.lightRange)) currentAlerts.push('light');
+
+    const newAlerts = currentAlerts.filter((key) => !activeThresholdAlerts.includes(key));
+    newAlerts.forEach((type) => {
+      const content = getEnvironmentAlertContent(type);
+      addNotification({
+        id: `alert-${type}`,
+        title: content.title,
+        message: content.message,
+        type: 'alert',
+        action: () => router.replace('/alerts'),
+      });
+    });
+    setActiveThresholdAlerts(currentAlerts);
+  }, [temperature, humidity, co2, light, thresholds, isLoaded]);
 
   // 8. 共用的異常判斷小工具
   const isWarning = (currentValue: number, range: number[]) => {
     if (!range || range.length !== 2) return false;
     return currentValue < range[0] || currentValue > range[1];
   };
-
-  // 9. 異常判斷邏輯
-  useEffect(() => {
-    const alerts: string[] = [];
-    if (isWarning(temperature, thresholds.tempRange)) alerts.push('temperature');
-    if (isWarning(humidity, thresholds.humidRange)) alerts.push('humidity');
-    if (isWarning(co2, thresholds.co2Range)) alerts.push('co2');
-    if (isWarning(light, thresholds.lightRange)) alerts.push('light');
-    
-    setActiveAlerts(alerts);
-    setShowWarning(alerts.length > 0);
-    setHideNotification(false);
-  }, [temperature, humidity, co2, light, thresholds]); 
-
-  // 滑入動畫邏輯
-  const isVisible = activeAlerts.length > 0 && !hideNotification;
-  useEffect(() => {
-    Animated.spring(slideAnim, {
-      toValue: isVisible ? 0 : 400,
-      useNativeDriver: true,
-      tension: 40,
-      friction: 7,
-    }).start();
-  }, [isVisible, slideAnim]);
 
   // 💡 10. 修改處：將原本內建的 alert 改為我們自訂的彈窗 (Modal)
   const handleSaveSchedule = async () => {
@@ -312,53 +386,35 @@ export default function EnvironmentScreen() {
 
       const data = await response.json();
       if (response.ok && data.success) {
-        // 💡 替換 alert，只顯示簡潔的儲存成功字樣
-        setSaveMessage('儲存成功！排程已同步至資料庫。');
+        const message = '儲存成功！排程已同步至資料庫。';
+        setSaveMessage(message);
+        addNotification({
+          title: '排程儲存成功',
+          message,
+          type: 'success',
+          action: () => router.replace('/environment'),
+        });
         setSaveModalVisible(true);
       } else {
-        setSaveMessage(`儲存失敗: ${data.message || '未知錯誤'}`);
+        const message = `儲存失敗: ${data.message || '未知錯誤'}`;
+        setSaveMessage(message);
+        addNotification({
+          title: '排程儲存失敗',
+          message,
+          type: 'error',
+        });
         setSaveModalVisible(true);
       }
     } catch (error) {
       console.error('儲存排程時發生錯誤:', error);
-      setSaveMessage('無法連接到後端伺服器，請檢查網路連線。');
+      const message = '無法連接到後端伺服器，請檢查網路連線。';
+      setSaveMessage(message);
+      addNotification({
+        title: '排程儲存失敗',
+        message,
+        type: 'error',
+      });
       setSaveModalVisible(true);
-    }
-  };
-
-  // 11. 動態生成警示文案
-  const getAlertContent = (type: string) => {
-    switch (type) {
-      case 'temperature':
-        return {
-          title: '溫度異常',
-          message: `偵測到溫度 ${Math.round(temperature)}°C，不在安全範圍 (${thresholds.tempRange[0]}~${thresholds.tempRange[1]}°C)。建議查看警示條件並採取處理。`,
-          actionLabel: '前往設定',
-          action: () => router.replace('/alerts'),
-        };
-      case 'humidity':
-        return {
-          title: '土壤濕度異常',
-          message: `偵測到土壤濕度 ${Math.round(humidity)}%，不在安全範圍 (${thresholds.humidRange[0]}~${thresholds.humidRange[1]}%)。建議查看警示條件並採取處理。`,
-          actionLabel: '前往設定',
-          action: () => router.replace('/alerts'),
-        };
-      case 'co2':
-        return {
-          title: 'CO₂ 濃度異常',
-          message: `偵測到 CO₂ ${Math.round(co2)} ppm，不在安全範圍 (${thresholds.co2Range[0]}~${thresholds.co2Range[1]} ppm)。建議查看警示條件並採取處理。`,
-          actionLabel: '前往設定',
-          action: () => router.replace('/alerts'),
-        };
-      case 'light':
-        return {
-          title: '光照強度異常',
-          message: `偵測到光照 ${Math.round(light).toLocaleString()} lux，不在安全範圍 (${thresholds.lightRange[0]}~${thresholds.lightRange[1]} lux)。建議查看警示條件並採取處理。`,
-          actionLabel: '前往設定',
-          action: () => router.replace('/alerts'),
-        };
-      default:
-        return { title: '異常', message: '偵測到未知異常', actionLabel: '處理', action: () => {} };
     }
   };
 
@@ -398,14 +454,6 @@ export default function EnvironmentScreen() {
     <>
       <PageShell
         active="environment"
-        onBellPress={() => {
-          if (activeAlerts.length > 0) {
-            setHideNotification((prev) => !prev);
-          } else {
-            alert('目前沒有新的異常通知');
-          }
-        }}
-        hasUnreadAlerts={activeAlerts.length > 0}
         leftFlex={6}
         rightFlex={4}
         left={(
@@ -508,35 +556,7 @@ export default function EnvironmentScreen() {
         )}
       />
       
-      {activeAlerts.length > 0 && (
-        <Animated.View style={[styles.floatingNotificationPanel, { transform: [{ translateX: slideAnim }] }]}>
-          <Text style={styles.notificationPanelHeader}><FontAwesome name="bell" size={14} color="#FFF" />  異常警示</Text>
-          <View style={[styles.notificationBox, styles.notificationVerticalBox]}>
-            {activeAlerts.map((type) => {
-              const info = getAlertContent(type);
-              return (
-                <View key={type} style={styles.notificationCard}>
-                  <Text style={styles.notificationAlertTitle}>{info.title}</Text>
-                  <Text style={styles.notificationMessage} numberOfLines={3}>{info.message}</Text>
-                  <View style={styles.notificationButtonsRow}>
-                    <TouchableOpacity style={[styles.notificationButton, styles.notificationPrimary, { flex: 1, marginRight: 6 }]} onPress={info.action}>
-                      <Text style={{ color: '#FFF', fontWeight: 'bold', textAlign: 'center' }}>{info.actionLabel}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity style={[styles.notificationButton, styles.notificationSecondary, { width: 56 }]} onPress={info.action}>
-                      <Text style={{ color: '#FFF', textAlign: 'center' }}>詳情</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-          <View style={{ alignItems: 'center', marginTop: 6 }}>
-            <TouchableOpacity onPress={() => setHideNotification(true)}>
-              <Text style={{ color: colors.muted }}>暫時收起</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      )}
+
 
       {/* 💡 核心新增：自訂暗色系儲存排程成功彈窗 */}
       <Modal
@@ -612,23 +632,7 @@ const styles = StyleSheet.create({
   controlLabel: { color: colors.text, fontSize: 14 },
   controlValueText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
   slider: { width: '100%', height: 40 },
-  notificationContainer: { width: '100%', alignItems: 'center', marginBottom: 18 },
-  notificationBox: { width: '100%', backgroundColor: colors.notificationBg, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border },
-  notificationTitle: { color: colors.text, fontSize: 16, fontWeight: '700' },
-  notificationAlertTitle: { color: colors.alert, fontWeight: '700', fontSize: 14 },
-  notificationMessage: { color: '#DDD', fontSize: 13, marginTop: 6 },
-  notificationButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
-  notificationButton: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: radii.md },
-  notificationPrimary: { backgroundColor: colors.primary },
-  notificationSecondary: { backgroundColor: colors.secondary },
   centerColumn: { width: 260, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
-  notificationVerticalBox: { width: '100%', alignItems: 'center', paddingVertical: 6 },
-  notificationItem: { marginBottom: 12, alignItems: 'center' },
-  notificationButtonsVertical: { flexDirection: 'column', gap: 8, marginTop: 8 },
-  floatingNotificationPanel: { position: 'absolute', top: 84, right: spacing.xl, width: 340, backgroundColor: colors.control, borderRadius: radii.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.4, shadowRadius: 8, elevation: 8, zIndex: 1000, maxHeight: '80%' },
-  notificationPanelHeader: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold', marginBottom: spacing.md },
-  notificationCard: { width: '100%', backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.md, marginBottom: spacing.md, alignItems: 'flex-start', minHeight: 80, justifyContent: 'space-between' },
-  notificationButtonsRow: { flexDirection: 'row', marginTop: 10, width: '100%', alignItems: 'center' },
 
   // 💡 追加新增的 Modal 樣式，沿用與登入頁完全一致的設計
   modalOverlay: {

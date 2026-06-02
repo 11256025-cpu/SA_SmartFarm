@@ -4,12 +4,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 export default function ProfileScreen() {
+  const { addNotification } = useNotifications();
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [userName, setUserName] = useState('');
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
@@ -99,7 +101,11 @@ export default function ProfileScreen() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (permissionResult.granted === false) {
-      Alert.alert('權限不足', '系統需要手機相簿存取權限才能更換大頭貼！');
+      addNotification({
+        title: '權限不足',
+        message: '系統需要手機相簿存取權限才能更換大頭貼！',
+        type: 'warning',
+      });
       return;
     }
 
@@ -119,6 +125,11 @@ export default function ProfileScreen() {
       setAvatarUri(imagePayload);
       try {
         await AsyncStorage.setItem('avatarUri', imagePayload);
+        addNotification({
+          title: '頭像更新成功',
+          message: '您的大頭貼已更新並同步至系統。',
+          type: 'success',
+        });
         let uid = await AsyncStorage.getItem('userId') || '1';
         // 嘗試同步到後端 API
         const response = await fetch(`${BASE_URL}/api/users/${uid}/avatar`, {
@@ -131,13 +142,22 @@ export default function ProfileScreen() {
         else console.log('❌ 後端更新頭像失敗', await response.text());
       } catch (e) {
         console.warn('儲存大頭貼失敗', e);
+        addNotification({
+          title: '頭像更新失敗',
+          message: '儲存大頭貼時發生錯誤，請稍後再試。',
+          type: 'error',
+        });
       }
     }
   };
 
   const handleSaveProfile = async () => {
     if (!editName.trim()) {
-      Alert.alert('提示', '暱稱不能為空白！');
+      addNotification({
+        title: '暱稱不可空白',
+        message: '請輸入有效的暱稱內容。',
+        type: 'warning',
+      });
       return;
     }
     setUserName(editName);
@@ -145,6 +165,11 @@ export default function ProfileScreen() {
     
     try {
       await AsyncStorage.setItem('userName', editName);
+      addNotification({
+        title: '暱稱更新成功',
+        message: '您的暱稱已更新並存入本地。',
+        type: 'success',
+      });
       let uid = await AsyncStorage.getItem('userId') || '1';
       // 同步到後端 API
       fetch(`${BASE_URL}/api/users/${uid}`, {
@@ -154,6 +179,11 @@ export default function ProfileScreen() {
       }).catch(() => console.log('後端更新暱稱失敗，但已存入本地快取'));
     } catch (e) {
       console.warn('儲存暱稱失敗', e);
+      addNotification({
+        title: '暱稱更新失敗',
+        message: '儲存暱稱時發生錯誤，請稍後再試。',
+        type: 'error',
+      });
     }
   };
 
@@ -163,13 +193,18 @@ export default function ProfileScreen() {
       const confirmed = window.confirm('確定要登出您的帳號嗎？');
       if (!confirmed) return;
       await AsyncStorage.clear();
+      addNotification({
+        title: '登出成功',
+        message: '您已成功登出。',
+        type: 'info',
+      });
       router.replace('/(auth)/login');
     } else {
       Alert.alert('登出確認', '確定要登出您的帳號嗎？', [
         { text: '取消', style: 'cancel' },
         { 
           text: '確定登出', 
-          onPress: async () => { await AsyncStorage.clear(); router.replace('/(auth)/login'); } 
+          onPress: async () => { await AsyncStorage.clear(); addNotification({ title: '登出成功', message: '您已成功登出。', type: 'info' }); router.replace('/(auth)/login'); } 
         }
       ]);
     }

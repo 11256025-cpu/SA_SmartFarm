@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { useNotifications } from '../../components/NotificationProvider';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
 
@@ -22,6 +23,7 @@ export default function LoginScreen() {
   // 💡 新增：控制「登入成功彈窗」的顯示狀態與內文
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const { addNotification } = useNotifications();
 
   // 建立密碼輸入框的錨點
   const passwordInputRef = useRef<TextInput>(null);
@@ -72,34 +74,40 @@ export default function LoginScreen() {
           }
         }
 
-        // 💡 修改處：簡化內文，只需要有「登入成功」
+        addNotification({
+          title: '登入成功',
+          message: '歡迎回來！您已成功登入系統。',
+          type: 'success',
+        });
+
+        // 💡 顯示成功彈窗並導向主頁
         setSuccessMessage('🎉 登入成功！');
-
-        // 顯示自訂彈窗
         setSuccessModalVisible(true);
-
-        // 💡 延遲 2.5 秒後自動執行關閉彈窗並跳轉
         setTimeout(() => {
           handleCloseModalAndNavigate();
         }, 2500);
-
       } else {
         const msg = data.message || '';
         if (
-          msg.includes('查無') || 
-          msg.includes('不存在') || 
-          msg.includes('找不到') || 
+          msg.includes('查無') ||
+          msg.includes('不存在') ||
+          msg.includes('找不到') ||
           msg.toLowerCase().includes('not found') ||
           msg.toLowerCase().includes('exist')
         ) {
-          setAccountError("此帳號不存在"); 
+          setAccountError('此帳號不存在');
         } else {
-          setPasswordError("密碼輸入錯誤"); 
+          setPasswordError('密碼輸入錯誤');
         }
       }
     } catch (error) {
       console.error("連線錯誤:", error);
       setPasswordError("無法連線到伺服器，請確認後端已啟動！");
+      addNotification({
+        title: '登入失敗',
+        message: '⚠️ 無法連線到伺服器，請確認後端已啟動。',
+        type: 'error',
+      });
     }
   };
 

@@ -1,9 +1,11 @@
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Image, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
+import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
@@ -41,6 +43,7 @@ interface Crop {
 export default function CropsScreen() {
   // === 狀態管理 ===
   const [crops, setCrops] = useState<Crop[]>([]);
+  const { addNotification } = useNotifications();
 
   const [isModalVisible, setIsModalVisible] = useState(false);
 
@@ -63,6 +66,11 @@ export default function CropsScreen() {
         }
       } catch (error) {
         console.warn('載入作物失敗:', error);
+        addNotification({
+          title: '載入作物失敗',
+          message: '⚠️ 無法從伺服器讀取作物資料，請檢查後端是否已啟動。',
+          type: 'error',
+        });
       }
     };
     loadCrops();
@@ -73,7 +81,11 @@ export default function CropsScreen() {
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (permissionResult.granted === false) {
-      alert("系統需要手機相簿存取權限才能上傳植物照片！");
+      addNotification({
+        title: '相簿存取權限不足',
+        message: '系統需要手機相簿存取權限才能上傳植物照片。',
+        type: 'warning',
+      });
       return;
     }
 
@@ -126,7 +138,11 @@ export default function CropsScreen() {
   // 儲存表單
   const handleSaveCrop = async () => {
     if (!cropName.trim()) {
-      alert('請輸入作物名稱！');
+      addNotification({
+        title: '欄位不足',
+        message: '請輸入作物名稱！',
+        type: 'warning',
+      });
       return;
     }
 
@@ -174,7 +190,12 @@ export default function CropsScreen() {
       const data = await response.json();
 
       if (data.success) {
-        alert(isEditing ? '✅ 作物已成功更新！' : '✅ 作物已成功新增！');
+        addNotification({
+          title: isEditing ? '作物更新成功' : '新增作物成功',
+          message: isEditing ? '作物已成功更新，已同步至資料庫。' : '作物已成功新增，請留意後續生長狀況。',
+          type: 'success',
+          action: () => router.replace('/crops'),
+        });
         
         if (isEditing) {
           setCrops(crops.map(c => c.id === editingCropId ? { ...c, ...payload } : c));
@@ -185,11 +206,19 @@ export default function CropsScreen() {
 
         handleCloseModal();
       } else {
-        alert(`❌ 儲存失敗：${data.message || '請稍後再試'}`);
+        addNotification({
+          title: '作物儲存失敗',
+          message: data.message || '請稍後再試。',
+          type: 'error',
+        });
       }
     } catch (error) {
       console.error('儲存作物時發生錯誤:', error);
-      alert('⚠️ 無法連線到伺服器，請確認後端服務已啟動。');
+      addNotification({
+        title: '儲存失敗',
+        message: '⚠️ 無法連線到伺服器，請確認後端服務已啟動。',
+        type: 'error',
+      });
     }
   };
 
@@ -201,7 +230,11 @@ export default function CropsScreen() {
       try {
         const cropToUpdate = crops.find(c => c.id === editingCropId);
         if (!cropToUpdate) {
-          alert('找不到要更新的作物。');
+          addNotification({
+            title: '找不到目標作物',
+            message: '找不到要更新的作物。',
+            type: 'warning',
+          });
           return;
         }
 
@@ -216,13 +249,21 @@ export default function CropsScreen() {
 
         const data = await response.json();
         if (data.success) {
-          alert('✅ 歷史紀錄已成功清空！');
-          // 直接更新前端狀態，讓畫面同步刷新
+          addNotification({
+            title: '歷史紀錄已清空',
+            message: '該作物的狀態變更歷史已成功清空。',
+            type: 'success',
+            action: () => router.replace('/crops'),
+          });
           setCrops(crops.map(c => (c.id === editingCropId ? { ...c, history: [] } : c)));
         } else {
-          alert(`❌ 清空失敗：${data.message || '請稍後再試'}`);
+          addNotification({
+            title: '清空失敗',
+            message: data.message || '請稍後再試。',
+            type: 'error',
+          });
         }
-      } catch (error) { console.error('清空歷史紀錄時發生錯誤:', error); alert('⚠️ 無法連線到伺服器。'); }
+      } catch (error) { console.error('清空歷史紀錄時發生錯誤:', error); addNotification({ title: '清空失敗', message: '⚠️ 無法連線到伺服器。', type: 'error' }); }
     };
 
     if (Platform.OS === 'web') {
@@ -258,15 +299,27 @@ export default function CropsScreen() {
 
         const data = await response.json();
         if (data.success) {
-          alert('🗑️ 作物已成功刪除！');
+          addNotification({
+            title: '作物刪除成功',
+            message: '作物已成功刪除並從列表中移除。',
+            type: 'success',
+          });
           setCrops(crops.filter(c => c.id !== editingCropId));
           handleCloseModal();
         } else {
-          alert(`❌ 刪除失敗：${data.message || '請稍後再試'}`);
+          addNotification({
+            title: '刪除失敗',
+            message: data.message || '請稍後再試。',
+            type: 'error',
+          });
         }
       } catch (error) {
         console.error('刪除作物時發生錯誤:', error);
-        alert('⚠️ 無法連線到伺服器。');
+        addNotification({
+          title: '刪除失敗',
+          message: '⚠️ 無法連線到伺服器。',
+          type: 'error',
+        });
       }
     };
 

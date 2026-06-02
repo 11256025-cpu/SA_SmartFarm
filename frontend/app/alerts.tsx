@@ -4,6 +4,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, FlatList, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
@@ -20,6 +21,7 @@ interface AlertLog {
 
 export default function AlertsScreen() {
   // 1. 警示閾值狀態：[下限, 上限]
+  const { addNotification } = useNotifications();
   const [tempRange, setTempRange] = useState([15, 35]);
   const [humidRange, setHumidRange] = useState([30, 80]);
   const [co2Range, setCo2Range] = useState([400, 1000]);
@@ -75,12 +77,20 @@ export default function AlertsScreen() {
         try {
           let uid = await AsyncStorage.getItem('userId') || '1';
           const resp = await fetch(`${BASE_URL}/api/alerts/logs?userId=${uid}`);
+          if (!resp.ok) {
+            throw new Error(`伺服器回應 ${resp.status}`);
+          }
           const data = await resp.json();
           if (data.success && data.logs) {
             setAlertLogs(data.logs);
           }
         } catch (e) {
           console.warn('❌ 載入警示紀錄失敗：', e);
+          addNotification({
+            title: '載入失敗',
+            message: '⚠️ 無法讀取警示紀錄，請確認後端是否已啟動在 http://localhost:3000。',
+            type: 'error',
+          });
         }
       };
       loadAlertLogs();
@@ -92,18 +102,36 @@ export default function AlertsScreen() {
     const performClearLogs = async () => {
       try {
         const uid = await AsyncStorage.getItem('userId') || '1';
-        // 假設後端有 DELETE /api/alerts/logs?userId=... 的 API
         const response = await fetch(`${BASE_URL}/api/alerts/logs?userId=${uid}`, {
           method: 'DELETE',
         });
+        if (!response.ok) {
+          throw new Error(`伺服器回應 ${response.status}`);
+        }
 
         const data = await response.json();
         if (data.success) {
           setAlertLogs([]); // 同步清空前端狀態
+          addNotification({
+            title: '警示紀錄清空成功',
+            message: '所有警示紀錄已成功清空。',
+            type: 'success',
+          });
         } else {
-          alert(`❌ 清空失敗：${data.message || '請稍後再試'}`);
+          addNotification({
+            title: '清空失敗',
+            message: `❌ ${data.message || '清空警示紀錄失敗，請稍後再試'}`,
+            type: 'error',
+          });
         }
-      } catch (error) { console.error('清空警示紀錄時發生錯誤:', error); alert('⚠️ 無法連線到伺服器。'); }
+      } catch (error) {
+        console.error('清空警示紀錄時發生錯誤:', error);
+        addNotification({
+          title: '清空失敗',
+          message: '⚠️ 無法連線到伺服器，請確認後端是否已啟動在 http://localhost:3000。',
+          type: 'error',
+        });
+      }
     };
 
     if (Platform.OS === 'web') {
@@ -193,13 +221,25 @@ export default function AlertsScreen() {
       const data = await response.json();
 
       if (data.success) {
-        alert('✅ 警示條件已成功儲存到資料庫！');
+        addNotification({
+          title: '警示條件儲存成功',
+          message: '✅ 警示條件已成功儲存到資料庫。',
+          type: 'success',
+        });
       } else {
-        alert('❌ 儲存失敗：' + (data.message || '請稍後再試。'));
+        addNotification({
+          title: '警示條件儲存失敗',
+          message: data.message || '請稍後再試。',
+          type: 'error',
+        });
       }
     } catch (error) {
       console.error('儲存設定時發生錯誤:', error);
-      alert('⚠️ 無法連線到伺服器，請確認後端已啟動！且 IP 設定正確。');
+      addNotification({
+        title: '儲存失敗',
+        message: '⚠️ 無法連線到伺服器，請確認後端已啟動！且 IP 設定正確。',
+        type: 'error',
+      });
     }
   };
 

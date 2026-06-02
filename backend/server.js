@@ -610,6 +610,37 @@ app.post('/api/schedule', (req, res) => {
     });
 });
 
+// 💡 新增：處理清空特定使用者警示紀錄的 DELETE API
+app.delete('/api/alerts/logs', (req, res) => {
+    const userId = req.query.userId;
+    const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
+    
+    // 檢查有沒有帶 userId
+    if (!userId) {
+        console.log(`[${timeStr}] ⚠️ 清空紀錄失敗：前端未提供 userId`);
+        return res.status(400).json({ success: false, message: "缺少 userId 參數" });
+    }
+
+    const sql = `DELETE FROM ALERT_LOGS WHERE user_id = ?`;
+
+    db.run(sql, [String(userId)], function(err) {
+        if (err) {
+            console.error(`[${timeStr}] ❌ 幫使用者 ${userId} 清空警示紀錄時發生 SQL 錯誤:`, err.message);
+            return res.status(500).json({ success: false, message: "資料庫刪除失敗" });
+        }
+
+        // this.changes 代表這句 SQL 實際影響（刪除）了幾筆資料
+        console.log(`[${timeStr}] 🗑️  [清空紀錄] 成功幫使用者 ${userId} 刪除了 ${this.changes} 筆警示紀錄`);
+        
+        // 回傳前端預期的資料結構
+        res.json({ 
+            success: true, 
+            message: "警示紀錄已成功清空", 
+            deletedCount: this.changes 
+        });
+    });
+});
+
 // 取得使用者的排程設定
 app.get('/api/schedule', (req, res) => {
     const userId = req.query.userId;
