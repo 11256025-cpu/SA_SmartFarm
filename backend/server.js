@@ -76,11 +76,22 @@ function initializeDatabase() {
         )`);
 
         // 5. 建立排程設定表
-        db.run(`CREATE TABLE IF NOT EXISTS schedule_settings (
+        db.run(`CREATE TABLE IF NOT EXISTS SCHEDULE_SETTINGS (
             user_id TEXT PRIMARY KEY,
             frequency TEXT,
             duration TEXT,
             updated_at TEXT
+        )`);
+
+        // 6. 建立作物資料表
+        db.run(`CREATE TABLE IF NOT EXISTS CROPS (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            userId TEXT NOT NULL,
+            name TEXT NOT NULL,
+            stage TEXT,
+            status TEXT,
+            image TEXT,
+            history TEXT
         )`);
 
         console.log("📋 資料庫資料表檢查與初始化完成！");
@@ -216,7 +227,7 @@ setInterval(() => {
             checkAndAlert('光照強度', state.light, row.light_warning, 'lux');
 
             // 自動灌溉排程：當土壤濕度低於設定下限時，按照使用者排程觸發一次灌溉
-            db.get(`SELECT * FROM schedule_settings WHERE user_id = ?`, [uid], (err2, scheduleRow) => {
+            db.get(`SELECT * FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [uid], (err2, scheduleRow) => {
                 if (err2 || !scheduleRow) return;
 
                 const intervalMinutes = Number(scheduleRow.frequency) || 0;
@@ -601,11 +612,11 @@ app.get('/api/alerts/logs', (req, res) => {
 app.post('/api/schedule', (req, res) => {
     const { userId, frequency, duration } = req.body;
     if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
-    db.get(`SELECT * FROM schedule_settings WHERE user_id = ?`, [userId], (err, row) => {
+    db.get(`SELECT * FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [userId], (err, row) => {
         if (row) {
-            db.run(`UPDATE schedule_settings SET frequency = ?, duration = ?, updated_at = datetime('now', '+8 hours') WHERE user_id = ?`, [frequency, duration, userId], () => res.json({ success: true }));
+            db.run(`UPDATE SCHEDULE_SETTINGS SET frequency = ?, duration = ?, updated_at = datetime('now', '+8 hours') WHERE user_id = ?`, [frequency, duration, userId], () => res.json({ success: true }));
         } else {
-            db.run(`INSERT INTO schedule_settings (user_id, frequency, duration, updated_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))`, [userId, frequency, duration], () => res.json({ success: true }));
+            db.run(`INSERT INTO SCHEDULE_SETTINGS (user_id, frequency, duration, updated_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))`, [userId, frequency, duration], () => res.json({ success: true }));
         }
     });
 });
@@ -645,7 +656,7 @@ app.delete('/api/alerts/logs', (req, res) => {
 app.get('/api/schedule', (req, res) => {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
-    db.get(`SELECT user_id, frequency, duration, updated_at FROM schedule_settings WHERE user_id = ?`, [userId], (err, row) => {
+    db.get(`SELECT user_id, frequency, duration, updated_at FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [userId], (err, row) => {
         if (err) return res.status(500).json({ success: false, message: '資料庫查詢錯誤' });
         if (!row) return res.json({ success: true, schedule: null });
         return res.json({ success: true, schedule: { frequency: Number(row.frequency), duration: Number(row.duration), updated_at: row.updated_at } });

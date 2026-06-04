@@ -58,17 +58,17 @@ db.serialize(() => {
         record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
     )`);
 
-    // 5. 建立 schedule_settings 表格 (自動灌溉排程 - 刪除了重複的 IRRIGATION 表，統一用這個)
-    db.run(`CREATE TABLE IF NOT EXISTS schedule_settings (
+    // 5. 建立 SCHEDULE_SETTINGS 表格 (自動灌溉排程 - 刪除了重複的 IRRIGATION 表，統一用這個)
+    db.run(`CREATE TABLE IF NOT EXISTS SCHEDULE_SETTINGS (
         user_id TEXT PRIMARY KEY,
         frequency TEXT,
         duration TEXT,
         updated_at DATETIME DEFAULT (datetime('now', '+8 hours'))
     )`);
 
-    // 6. 建立 crops 表格 (作物資料)
+    // 6. 建立 CROPS 表格 (作物資料)
     // 💡 新增了 history 欄位，用來儲存作物的「狀態變更紀錄 (JSON 字串)」
-    db.run(`CREATE TABLE IF NOT EXISTS crops (
+    db.run(`CREATE TABLE IF NOT EXISTS CROPS (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         userId TEXT NOT NULL,
         name TEXT NOT NULL,
@@ -77,8 +77,8 @@ db.serialize(() => {
         image TEXT,
         history TEXT
     )`, () => {
-        // 💡 嘗試為舊有的 crops 表格補上 history 欄位
-        db.run(`ALTER TABLE crops ADD COLUMN history TEXT`, (err) => {
+        // 💡 嘗試為舊有的 CROPS 表格補上 history 欄位
+        db.run(`ALTER TABLE CROPS ADD COLUMN history TEXT`, (err) => {
             // 如果 err 存在，通常是因為欄位已經存在，可以直接忽略
             console.log("✅ 所有資料表建立與優化完成 (已為舊表補上 history 欄位)！");
             db.close();

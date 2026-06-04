@@ -15,7 +15,7 @@ router.get('/', (req, res) => {
         return res.status(400).json({ success: false, message: '缺少 userId 參數' });
     }
 
-    const sql = `SELECT * FROM crops WHERE userId = ?`;
+    const sql = `SELECT * FROM CROPS WHERE userId = ?`;
     db.all(sql, [userId], (err, rows) => {
         if (err) {
             console.error('取得作物失敗:', err);
@@ -44,7 +44,7 @@ router.post('/', (req, res) => {
     // 💡 將陣列轉換成字串再存入資料庫
     const historyStr = JSON.stringify(history || []);
 
-    const sql = `INSERT INTO crops (userId, name, stage, status, image, history) VALUES (?, ?, ?, ?, ?, ?)`;
+    const sql = `INSERT INTO CROPS (userId, name, stage, status, image, history) VALUES (?, ?, ?, ?, ?, ?)`;
     db.run(sql, [userId, name, stage, status, image, historyStr], function(err) {
         if (err) {
             console.error('新增作物失敗:', err);
@@ -70,7 +70,7 @@ router.put('/:id', (req, res) => {
     // 💡 將陣列轉換成字串再存入資料庫
     const historyStr = JSON.stringify(history || []);
 
-    const sql = `UPDATE crops SET name = ?, stage = ?, status = ?, image = ?, history = ? WHERE id = ?`;
+    const sql = `UPDATE CROPS SET name = ?, stage = ?, status = ?, image = ?, history = ? WHERE id = ?`;
     db.run(sql, [name, stage, status, image, historyStr, cropId], function(err) {
         if (err) {
             console.error('更新作物失敗:', err);
@@ -86,7 +86,7 @@ router.put('/:id', (req, res) => {
 router.delete('/:id', (req, res) => {
     const cropId = req.params.id;
 
-    const sql = `DELETE FROM crops WHERE id = ?`;
+    const sql = `DELETE FROM CROPS WHERE id = ?`;
     db.run(sql, [cropId], function(err) {
         if (err) {
             console.error('刪除作物失敗:', err);
