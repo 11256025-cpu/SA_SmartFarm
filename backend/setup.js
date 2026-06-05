@@ -70,7 +70,7 @@ db.serialize(() => {
     // 💡 新增了 history 欄位，用來儲存作物的「狀態變更紀錄 (JSON 字串)」
     db.run(`CREATE TABLE IF NOT EXISTS CROPS (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        userId TEXT NOT NULL,
+        user_id TEXT NOT NULL,
         name TEXT NOT NULL,
         stage TEXT,
         status TEXT,

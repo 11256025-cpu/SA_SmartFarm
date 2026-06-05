@@ -86,7 +86,7 @@ function initializeDatabase() {
         // 6. 建立作物資料表
         db.run(`CREATE TABLE IF NOT EXISTS CROPS (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            userId TEXT NOT NULL,
+            user_id TEXT NOT NULL,
             name TEXT NOT NULL,
             stage TEXT,
             status TEXT,
