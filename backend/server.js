@@ -80,7 +80,7 @@ function initializeDatabase() {
             user_id TEXT PRIMARY KEY,
             frequency TEXT,
             duration TEXT,
-            updated_at TEXT
+            updated_at DATETIME DEFAULT (datetime('now', '+8 hours'))
         )`);
 
         // 6. 建立作物資料表
