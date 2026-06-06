@@ -9,10 +9,9 @@ const db = new sqlite3.Database('./farm.db');
 // 1. 取得使用者的作物列表 (GET /api/crops?userId=1)
 // ==========================================
 router.get('/', (req, res) => {
-    const userId = req.query.userId;
-    
-    if (!userId) {
-        return res.status(400).json({ success: false, message: '缺少 userId 參數' });
+    const userId = Number(req.query.userId);
+    if (!Number.isInteger(userId)) {
+        return res.status(400).json({ success: false, message: '缺少或無效的 userId 參數' });
     }
 
     const sql = `SELECT * FROM CROPS WHERE user_id = ?`;
@@ -36,16 +35,17 @@ router.get('/', (req, res) => {
 // ==========================================
 router.post('/', (req, res) => {
     const { userId, name, stage, status, image, history } = req.body;
+    const userIdInt = Number(userId);
 
-    if (!userId || !name) {
-        return res.status(400).json({ success: false, message: '缺少必要欄位 (userId, name)' });
+    if (!Number.isInteger(userIdInt) || !name) {
+        return res.status(400).json({ success: false, message: '缺少必要欄位 (userId, name) 或 userId 格式錯誤' });
     }
 
     // 💡 將陣列轉換成字串再存入資料庫
     const historyStr = JSON.stringify(history || []);
 
     const sql = `INSERT INTO CROPS (user_id, name, stage, status, image, history) VALUES (?, ?, ?, ?, ?, ?)`;
-    db.run(sql, [userId, name, stage, status, image, historyStr], function(err) {
+    db.run(sql, [userIdInt, name, stage, status, image, historyStr], function(err) {
         if (err) {
             console.error('新增作物失敗:', err);
             return res.status(500).json({ success: false, message: '資料庫寫入失敗' });

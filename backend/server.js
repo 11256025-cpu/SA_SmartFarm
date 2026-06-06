@@ -8,6 +8,11 @@ const port = 3000;
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+const parseUserId = (value) => {
+    const id = Number(value);
+    return Number.isInteger(id) ? id : null;
+};
+
 // ==========================================
 // 💡 模擬環境變數記憶體暫存區 (全域變數)
 // ==========================================
@@ -30,7 +35,7 @@ function initializeDatabase() {
         // 1. 建立歷史數據表
         db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
+            user_id INTEGER,
             history_temp REAL,
             history_soil_moisture REAL,
             history_light REAL,
@@ -40,7 +45,7 @@ function initializeDatabase() {
 
         // 2. 建立警報設定範圍表
         db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
-            user_id TEXT PRIMARY KEY,
+            user_id INTEGER PRIMARY KEY,
             temp_warning TEXT,
             soil_warning TEXT,
             co2_warning TEXT,
@@ -50,7 +55,7 @@ function initializeDatabase() {
         // 3. 建立警報紀錄表 (解決你目前報錯的核心問題)
         db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
             log_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
+            user_id INTEGER,
             message TEXT,
             record_time DATETIME
         )`);
@@ -58,7 +63,7 @@ function initializeDatabase() {
         // 4. 建立灌溉紀錄表：手動/自動灌溉事件都會記錄
         db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION_LOGS (
             irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
+            user_id INTEGER,
             irrigation_type TEXT,
             target_humidity REAL,
             new_humidity REAL,
@@ -77,7 +82,7 @@ function initializeDatabase() {
 
         // 5. 建立排程設定表
         db.run(`CREATE TABLE IF NOT EXISTS SCHEDULE_SETTINGS (
-            user_id TEXT PRIMARY KEY,
+            user_id INTEGER PRIMARY KEY,
             frequency TEXT,
             duration TEXT,
             updated_at DATETIME DEFAULT (datetime('now', '+8 hours'))
@@ -86,7 +91,7 @@ function initializeDatabase() {
         // 6. 建立作物資料表
         db.run(`CREATE TABLE IF NOT EXISTS CROPS (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
             name TEXT NOT NULL,
             stage TEXT,
             status TEXT,
@@ -302,8 +307,8 @@ app.get('/api/debug/history', (req, res) => {
 
 // 取得使用者當前模擬器狀態：先從記憶體 currentFarmStates，若沒有則回溯 HISTORY 最近一筆
 app.get('/api/simulator/state', (req, res) => {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
+    const userId = parseUserId(req.query.userId);
+    if (userId === null) return res.status(400).json({ success: false, message: '缺少或無效的 userId' });
     const uid = String(userId);
 
     if (currentFarmStates[uid]) {
@@ -311,7 +316,7 @@ app.get('/api/simulator/state', (req, res) => {
     }
 
     const sql = `SELECT history_temp as temperature, history_soil_moisture as humidity, history_co2 as co2, history_light as light, record_time FROM HISTORY WHERE user_id = ? ORDER BY record_time DESC LIMIT 1`;
-    db.get(sql, [uid], (err, row) => {
+    db.get(sql, [userId], (err, row) => {
         if (err) return res.status(500).json({ success: false, message: '資料庫查詢錯誤' });
         if (!row) return res.json({ success: true, state: null });
 
@@ -333,9 +338,10 @@ app.get('/api/simulator/state', (req, res) => {
 // 💡 2. 控制面板滑軌放開時更新暫存
 app.post('/api/simulator/update', (req, res) => {
     let { userId, temperature, humidity, co2, light } = req.body;
+    const parsedUserId = parseUserId(userId);
 
-    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
-    const uidStr = String(userId);
+    if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
+    const uidStr = String(parsedUserId);
 
     if (!currentFarmStates[uidStr]) {
         currentFarmStates[uidStr] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
@@ -356,8 +362,9 @@ app.post('/api/simulator/update', (req, res) => {
 
 // 💡 3. 報表分頁查詢歷史數據 (🔥 終極相容防爆版)
 app.get('/api/reports/history', (req, res) => {
-    let { startDate, endDate, date, userId } = req.query;
-    if (!userId) return res.status(400).json({ success: false, historyData: [], message: "缺少 userId" });
+    let { startDate, endDate, date } = req.query;
+    const userId = parseUserId(req.query.userId);
+    if (userId === null) return res.status(400).json({ success: false, historyData: [], message: "缺少或無效的 userId" });
     
     // 💡 核心相容轉換：如果前端傳過來的是舊版參數 date，我們自動幫它映射到 start 變數上
     const start = startDate || date;
@@ -386,7 +393,7 @@ app.get('/api/reports/history', (req, res) => {
         ORDER BY record_time ASC
     `;
 
-    db.all(sql, [start, end, start, end, String(userId)], (err, rows) => {
+    db.all(sql, [start, end, start, end, userId], (err, rows) => {
         if (err) {
             console.error("❌ 查詢歷史報表失敗:", err.message);
             return res.status(500).json({ success: false, historyData: [], message: "資料庫查詢錯誤" });
@@ -459,13 +466,14 @@ app.post('/api/login', (req, res) => {
 
 app.post('/api/alerts/settings', (req, res) => {
     const { userId, tempRange, humidRange, co2Range, lightRange } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: "缺少使用者 ID" });
+    const parsedUserId = parseUserId(userId);
+    if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的使用者 ID" });
     const tempStr = JSON.stringify(tempRange);
     const soilStr = JSON.stringify(humidRange);
     const co2Str = JSON.stringify(co2Range);
     const lightStr = JSON.stringify(lightRange);
     const checkSql = `SELECT * FROM WARNING_RANGE WHERE user_id = ?`;
-    db.get(checkSql, [userId], (err, row) => {
+    db.get(checkSql, [parsedUserId], (err, row) => {
         if (row) {
             const updateSql = `UPDATE WARNING_RANGE SET temp_warning = ?, soil_warning = ?, co2_warning = ?, light_warning = ? WHERE user_id = ?`;
             db.run(updateSql, [tempStr, soilStr, co2Str, lightStr, userId], () => res.json({ success: true, message: "設定更新成功！" }));
@@ -477,8 +485,8 @@ app.post('/api/alerts/settings', (req, res) => {
 });
 
 app.get('/api/alerts/settings', (req, res) => {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    const userId = parseUserId(req.query.userId);
+    if (userId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
     db.get(`SELECT * FROM WARNING_RANGE WHERE user_id = ?`, [userId], (err, row) => {
         if (!row) return res.json({ success: true, settings: null });
         
@@ -506,8 +514,9 @@ app.get('/api/alerts/settings', (req, res) => {
 
 app.post('/api/alerts/logs', (req, res) => {
     const { userId, message } = req.body;
-    if (!userId || !message) return res.status(400).json({ success: false, message: "缺少必要參數" });
-    db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [userId, message], function(err) {
+    const parsedUserId = parseUserId(userId);
+    if (parsedUserId === null || !message) return res.status(400).json({ success: false, message: "缺少必要參數或 userId 格式錯誤" });
+    db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [parsedUserId, message], function(err) {
         if (err) return res.status(500).json({ success: false, message: "新增紀錄失敗" });
         res.json({ success: true, message: "新增紀錄成功", id: this.lastID });
     });
@@ -515,8 +524,9 @@ app.post('/api/alerts/logs', (req, res) => {
 
 app.post('/api/irrigation/manual', (req, res) => {
     const { userId, targetHumidity } = req.body;
-    if (!userId || targetHumidity === undefined) return res.status(400).json({ success: false, message: "缺少必要參數" });
-    const uid = String(userId);
+    const parsedUserId = parseUserId(userId);
+    if (parsedUserId === null || targetHumidity === undefined) return res.status(400).json({ success: false, message: "缺少必要參數或 userId 格式錯誤" });
+    const uid = String(parsedUserId);
     const target = Number(targetHumidity);
     if (isNaN(target) || target < 0 || target > 100) return res.status(400).json({ success: false, message: "目標濕度需介於 0~100" });
 
@@ -543,8 +553,9 @@ app.post('/api/irrigation/manual', (req, res) => {
 
 app.post('/api/irrigation/auto', (req, res) => {
     const { userId, targetHumidity } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: "缺少使用者 ID" });
-    const uid = String(userId);
+    const parsedUserId = parseUserId(userId);
+    if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的使用者 ID" });
+    const uid = String(parsedUserId);
     if (!currentFarmStates[uid]) {
         currentFarmStates[uid] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
     }
@@ -571,10 +582,10 @@ app.post('/api/irrigation/auto', (req, res) => {
 });
 
 app.get('/api/reports/irrigation-count', (req, res) => {
-    const userId = req.query.userId;
+    const userId = parseUserId(req.query.userId);
     const startDate = req.query.startDate;
     const endDate = req.query.endDate || startDate;
-    if (!userId || !startDate) return res.status(400).json({ success: false, message: '缺少必要參數' });
+    if (userId === null || !startDate) return res.status(400).json({ success: false, message: '缺少必要參數或 userId 無效' });
 
     const fromDate = startDate;
     const toDate = endDate || startDate;
@@ -589,7 +600,7 @@ app.get('/api/reports/irrigation-count', (req, res) => {
         ORDER BY date ASC
     `;
 
-    db.all(sql, [String(userId), fromDate, toDate], (err, rows) => {
+    db.all(sql, [userId, fromDate, toDate], (err, rows) => {
         if (err) return res.status(500).json({ success: false, message: '查詢灌溉統計失敗' });
         const labels = rows.map(row => row.date);
         const counts = rows.map(row => Number(row.count));
@@ -601,8 +612,8 @@ app.get('/api/reports/irrigation-count', (req, res) => {
 });
 
 app.get('/api/alerts/logs', (req, res) => {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
+    const userId = parseUserId(req.query.userId);
+    if (userId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
     db.all(`SELECT log_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
         if (err) return res.status(500).json({ success: false, message: "查詢紀錄失敗" });
         res.json({ success: true, logs: rows || [] });
@@ -611,30 +622,31 @@ app.get('/api/alerts/logs', (req, res) => {
 
 app.post('/api/schedule', (req, res) => {
     const { userId, frequency, duration } = req.body;
-    if (!userId) return res.status(400).json({ success: false, message: "缺少 userId" });
-    db.get(`SELECT * FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [userId], (err, row) => {
+    const parsedUserId = parseUserId(userId);
+    if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
+    db.get(`SELECT * FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [parsedUserId], (err, row) => {
         if (row) {
-            db.run(`UPDATE SCHEDULE_SETTINGS SET frequency = ?, duration = ?, updated_at = datetime('now', '+8 hours') WHERE user_id = ?`, [frequency, duration, userId], () => res.json({ success: true }));
+            db.run(`UPDATE SCHEDULE_SETTINGS SET frequency = ?, duration = ?, updated_at = datetime('now', '+8 hours') WHERE user_id = ?`, [frequency, duration, parsedUserId], () => res.json({ success: true }));
         } else {
-            db.run(`INSERT INTO SCHEDULE_SETTINGS (user_id, frequency, duration, updated_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))`, [userId, frequency, duration], () => res.json({ success: true }));
+            db.run(`INSERT INTO SCHEDULE_SETTINGS (user_id, frequency, duration, updated_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))`, [parsedUserId, frequency, duration], () => res.json({ success: true }));
         }
     });
 });
 
 // 💡 新增：處理清空特定使用者警示紀錄的 DELETE API
 app.delete('/api/alerts/logs', (req, res) => {
-    const userId = req.query.userId;
+    const userId = parseUserId(req.query.userId);
     const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
     
     // 檢查有沒有帶 userId
-    if (!userId) {
+    if (userId === null) {
         console.log(`[${timeStr}] ⚠️ 清空紀錄失敗：前端未提供 userId`);
-        return res.status(400).json({ success: false, message: "缺少 userId 參數" });
+        return res.status(400).json({ success: false, message: "缺少或無效的 userId 參數" });
     }
 
     const sql = `DELETE FROM ALERT_LOGS WHERE user_id = ?`;
 
-    db.run(sql, [String(userId)], function(err) {
+    db.run(sql, [userId], function(err) {
         if (err) {
             console.error(`[${timeStr}] ❌ 幫使用者 ${userId} 清空警示紀錄時發生 SQL 錯誤:`, err.message);
             return res.status(500).json({ success: false, message: "資料庫刪除失敗" });
@@ -654,8 +666,8 @@ app.delete('/api/alerts/logs', (req, res) => {
 
 // 取得使用者的排程設定
 app.get('/api/schedule', (req, res) => {
-    const userId = req.query.userId;
-    if (!userId) return res.status(400).json({ success: false, message: '缺少 userId' });
+    const userId = parseUserId(req.query.userId);
+    if (userId === null) return res.status(400).json({ success: false, message: '缺少或無效的 userId' });
     db.get(`SELECT user_id, frequency, duration, updated_at FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [userId], (err, row) => {
         if (err) return res.status(500).json({ success: false, message: '資料庫查詢錯誤' });
         if (!row) return res.json({ success: true, schedule: null });
