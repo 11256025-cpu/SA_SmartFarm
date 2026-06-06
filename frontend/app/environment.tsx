@@ -31,6 +31,8 @@ export default function EnvironmentScreen() {
   const { addNotification } = useNotifications();
   const [activeThresholdAlerts, setActiveThresholdAlerts] = useState<string[]>([]);
   
+  // 💡 用來追蹤使用者是否正在操作控制面板，避免同步時覆蓋掉使用者的滑動位置
+  const [isInteracting, setIsInteracting] = useState(false);
   // 3. 追蹤是否已載入儲存的設定 (避免多次保存)
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -45,6 +47,39 @@ export default function EnvironmentScreen() {
     co2Range: [400, 1000],
     lightRange: [500, 50000]
   });
+
+  // 💡 新增：同步模擬器最新數據的函式 (解決自動灌溉數值未更新問題)
+  const syncSimulatorState = async () => {
+    // 如果使用者正在滑動控制面板，先跳過同步，以維持操作流暢度
+    if (isInteracting) return;
+
+    try {
+      const uid = await AsyncStorage.getItem('userId');
+      if (!uid) return;
+
+      const stateResp = await fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`);
+      const stateData = await stateResp.json();
+      
+      if (stateData.success && stateData.state) {
+        const s = stateData.state;
+        // 更新狀態，React 會自動處理數值變動與渲染
+        if (s.temperature !== undefined) setTemperature(Number(s.temperature));
+        if (s.humidity !== undefined) setHumidity(Number(s.humidity));
+        if (s.co2 !== undefined) setCo2(Number(s.co2));
+        if (s.light !== undefined) setLight(Number(s.light));
+
+        // 同時更新本地快取暫存，確保資料一致
+        saveControlSettings({ 
+          temperature: Number(s.temperature), 
+          humidity: Number(s.humidity), 
+          co2: Number(s.co2), 
+          light: Number(s.light) 
+        });
+      }
+    } catch (e) {
+      console.warn('同步環境數據失敗', e);
+    }
+  };
 
   // 4. 向後端請求使用者最新的設定 (已完成多使用者綁定)
   const fetchSettings = async () => {
@@ -94,6 +129,7 @@ export default function EnvironmentScreen() {
       } catch (e) {
         console.warn('載入模擬器當前狀態失敗', e);
       }
+      await syncSimulatorState();
     } catch (error) {
       console.warn('載入警示設定失敗，使用預設值。', error);
     }
@@ -314,6 +350,18 @@ export default function EnvironmentScreen() {
     }
   }, [isLoaded]);
 
+  // 💡 新增：定時輪詢 (Polling) 機制
+  // 每 3 秒從後端抓取一次最新數據，解決「後端自動灌溉但前端數值未即時顯示」的問題
+  useEffect(() => {
+    if (!isLoaded) return;
+
+    const pollInterval = setInterval(() => {
+      syncSimulatorState();
+    }, 3000);
+
+    return () => clearInterval(pollInterval);
+  }, [isLoaded, isInteracting]);
+
   // 7. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
   useFocusEffect(
     useCallback(() => {
@@ -431,7 +479,12 @@ export default function EnvironmentScreen() {
         maximumValue={max}
         value={value}
         onValueChange={setter}
+        onValueChange={(v) => {
+          setIsInteracting(true); // 使用者開始手動調整
+          setter(v);
+        }}
         onSlidingComplete={(v) => { 
+          setIsInteracting(false); // 調整結束，恢復自動同步
           updateBackendSimulator({ [apiKey]: Math.round(v) } as Parameters<typeof updateBackendSimulator>[0]);
         }}
         step={1}
@@ -560,7 +613,7 @@ export default function EnvironmentScreen() {
 
       {/* 💡 核心新增：自訂暗色系儲存排程成功彈窗 */}
       <Modal
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         visible={saveModalVisible}
         onRequestClose={() => setSaveModalVisible(false)}
