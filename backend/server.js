@@ -35,7 +35,7 @@ function initializeDatabase() {
             history_soil_moisture REAL,
             history_light REAL,
             history_co2 REAL,
-            record_time TEXT
+            record_time DATETIME
         )`);
 
         // 2. 建立警報設定範圍表
@@ -52,7 +52,7 @@ function initializeDatabase() {
             log_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id TEXT,
             message TEXT,
-            record_time TEXT
+            record_time DATETIME
         )`);
 
         // 4. 建立灌溉紀錄表：手動/自動灌溉事件都會記錄
@@ -63,7 +63,7 @@ function initializeDatabase() {
             target_humidity REAL,
             new_humidity REAL,
             condition TEXT,
-            record_time TEXT
+            record_time DATETIME
         )`);
 
         // 5. 建立使用者表 (配合你的 /api/login 和 /api/register)
