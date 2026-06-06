@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Platform, SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Animated, { FadeInRight, FadeOutRight } from 'react-native-reanimated';
 import TopNav from '../components/TopNav';
 import { NotificationType, useNotifications } from './NotificationProvider';
 import { colors, radii, spacing } from './sharedStyles';
@@ -188,7 +189,11 @@ export default function PageShell({ left, center, right, children, active, showN
         </View>
       </ScrollView>
       {panelVisible && (
-        <View style={styles.floatingNotificationPanel}>
+        <Animated.View 
+          entering={FadeInRight.duration(400)} 
+          exiting={FadeOutRight.duration(300)}
+          style={styles.floatingNotificationPanel}
+        >
           <Text style={styles.notificationHeader}>通知中心</Text>
           <ScrollView style={styles.notificationList} contentContainerStyle={styles.notificationListContent} nestedScrollEnabled>
             {notifications.length > 0 ? (
@@ -221,7 +226,7 @@ export default function PageShell({ left, center, right, children, active, showN
               <Text style={styles.notificationText}>目前沒有新的通知。</Text>
             )}
           </ScrollView>
-        </View>
+        </Animated.View>
       )}
     </SafeAreaView>
   );

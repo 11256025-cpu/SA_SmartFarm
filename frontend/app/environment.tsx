@@ -7,6 +7,7 @@ import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RNPickerSelect from 'react-native-picker-select';
+import Animated, { ZoomIn } from 'react-native-reanimated';
 import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
@@ -613,13 +614,16 @@ export default function EnvironmentScreen() {
 
       {/* 💡 核心新增：自訂暗色系儲存排程成功彈窗 */}
       <Modal
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         visible={saveModalVisible}
         onRequestClose={() => setSaveModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <Animated.View 
+            entering={ZoomIn.duration(400).springify()} 
+            style={styles.modalCard}
+          >
             <View style={styles.iconCircle}>
               <FontAwesome name="check" size={28} color="#FFFFFF" />
             </View>
@@ -629,7 +633,7 @@ export default function EnvironmentScreen() {
             <TouchableOpacity style={styles.modalButton} onPress={() => setSaveModalVisible(false)}>
               <Text style={styles.modalButtonText}>確 定</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 

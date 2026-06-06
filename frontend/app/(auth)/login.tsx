@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, SafeAreaView, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Animated, { ZoomIn } from 'react-native-reanimated';
 import { useNotifications } from '../../components/NotificationProvider';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
@@ -222,7 +223,10 @@ export default function LoginScreen() {
         onRequestClose={handleCloseModalAndNavigate}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <Animated.View 
+            entering={ZoomIn.duration(400).springify()} 
+            style={styles.modalCard}
+          >
             <View style={styles.iconCircle}>
               <FontAwesome name="check" size={28} color="#FFFFFF" />
             </View>
@@ -232,7 +236,7 @@ export default function LoginScreen() {
             <TouchableOpacity style={styles.modalButton} onPress={handleCloseModalAndNavigate}>
               <Text style={styles.modalButtonText}>確 定</Text>
             </TouchableOpacity>
-          </View>
+          </Animated.View>
         </View>
       </Modal>
 
@@ -243,7 +247,7 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#151718', 
+    backgroundColor: '#151718',
   },
   scrollContent: {
     flexGrow: 1,
@@ -254,7 +258,7 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 450,
     alignSelf: 'center',
-    backgroundColor: '#1E2124', 
+    backgroundColor: '#1E2124',
     padding: 32,
     borderRadius: 20,
     shadowColor: '#000',
@@ -307,33 +311,27 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   passwordInputSpecial: {
-    paddingRight: 50, 
+    paddingRight: 40,
   },
   eyeIconContainer: {
     position: 'absolute',
-    right: 16,
+    right: 12,
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4, 
+    paddingHorizontal: 2,
   },
   errorText: {
-    color: '#FF6B6B', 
-    fontSize: 14,
-    fontWeight: '500',
-    marginTop: 8,
-    paddingLeft: 4,
+    color: '#FF4D4F',
+    fontSize: 12,
+    marginTop: 4,
   },
   button: {
-    backgroundColor: '#5A8B73', 
+    backgroundColor: '#5A8B73',
     paddingVertical: 14,
     borderRadius: 8,
     alignItems: 'center',
     marginTop: 20,
-    shadowColor: '#5A8B73',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
   },
   buttonText: {
     color: '#FFFFFF',
@@ -349,8 +347,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-
-  // Modal 樣式
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.75)',
