@@ -6,40 +6,46 @@ import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, T
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
 
+// 定義後端 API 的基礎 URL (若在實機上測試，建議動態判斷平台或改為區域網路 IP)
 const BASE_URL = 'http://localhost:3000';
 
 export default function RegisterScreen() {
+  // 宣告狀態變數，用來儲存使用者輸入的註冊資料
   const [nickname, setNickname] = useState('');
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
 
-  // 💡 新增：控制「密碼」與「確認密碼」是否可見的獨立狀態（預設 false 為隱藏）
+  // 控制「密碼」與「確認密碼」是否可見的獨立狀態（預設 false 為隱藏，顯示為星號）
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isConfirmPasswordVisible, setIsConfirmPasswordVisible] = useState(false);
 
-  // 為輸入框建立 Ref 控制焦點
+  // 為輸入框建立 Ref，用來在使用者按下鍵盤「下一步」時，自動切換焦點到下一個輸入框
   const accountRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmPasswordRef = useRef<TextInput>(null);
 
+  // 處理註冊邏輯的非同步函式
   const handleRegister = async () => {
-    // 💡 1. 加入 .trim() 濾除前後多餘的空白，避免使用者不小心輸入空白被誤判為有值
+    // 1. 加入 .trim() 濾除前後多餘的空白，避免使用者不小心輸入空白字元被誤判為有值
     const trimmedNickname = nickname.trim();
     const trimmedAccount = account.trim();
     const trimmedPassword = password.trim();
     const trimmedConfirm = confirmPassword.trim();
 
+    // 檢查所有欄位是否都有填寫
     if (!trimmedNickname || !trimmedAccount || !trimmedPassword || !trimmedConfirm) {
       alert('【前端檢查】請確認所有欄位都有輸入字元！');
       return;
     }
+    // 檢查兩次密碼輸入是否一致
     if (trimmedPassword !== trimmedConfirm) {
       alert('兩次密碼輸入不一致！');
       return;
     }
 
     try {
+      // 發送 POST 請求至後端的註冊 API
       const response = await fetch(`${BASE_URL}/api/register`, {
         method: 'POST',
         headers: {
@@ -58,13 +64,15 @@ export default function RegisterScreen() {
         }),
       });
 
-      // 💡 先以純文字讀取，避免後端回傳 HTML (例如 404 Cannot POST) 導致 JSON.parse 壞掉
+      // 先以純文字讀取回應，避免後端回傳非 JSON 格式 (例如 HTML 或 404 Cannot POST 錯誤) 導致 JSON.parse 拋出例外
       const textResponse = await response.text();
       try {
+        // 嘗試將純文字轉換為 JSON 格式
         const data = JSON.parse(textResponse);
         if (data.success) {
           try {
-            // 儲存使用者識別到 AsyncStorage，讓 app 之後的請求都帶上 userId
+            // 註冊成功後，將回傳的使用者資訊儲存到本地的 AsyncStorage 中
+            // 這樣可以讓 app 在後續的請求中直接使用這些登入憑證 (即註冊完自動登入)
             if (data.user?.id) await AsyncStorage.setItem('userId', String(data.user.id));
             if (data.user?.nickname) await AsyncStorage.setItem('userName', data.user.nickname);
             if (data.user?.account) await AsyncStorage.setItem('loginAccount', data.user.account);
@@ -72,24 +80,29 @@ export default function RegisterScreen() {
           } catch (e) {
             console.warn('無法將 userId 儲存到 AsyncStorage', e);
           }
+          // 提示使用者註冊成功，並跳轉到環境監控頁面
           alert('🎉 註冊成功，已自動登入！');
           router.replace('/environment');
         } else {
-          // 💡 標示為後端回傳，方便釐清是哪邊擋下的
+          // 若後端驗證失敗 (例如帳號已存在)，顯示後端回傳的錯誤訊息
           alert(`【後端拒絕】${data.message || '註冊失敗'}`);
         }
       } catch (parseError) {
+        // 捕捉解析 JSON 失敗的例外 (通常代表 API 路徑錯誤或後端掛掉)
         console.error("後端回傳的非 JSON 內容:", textResponse);
         alert(`【伺服器錯誤 ${response.status}】\n請檢查後端是否有 /api/register 這個路由！`);
       }
     } catch (error) {
+      // 捕捉網路連線等最外層的例外錯誤
       console.error(error);
       alert('【連線失敗】無法連線。\n若使用實體手機測試，請將 BASE_URL 替換為電腦的區域網路 IP (如 192.168.X.X)。');
     }
   };
 
+  // 渲染註冊畫面
   return (
     <SafeAreaView style={styles.container}>
+      {/* 確保開啟小鍵盤時，輸入框不會被鍵盤遮擋 */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -117,8 +130,8 @@ export default function RegisterScreen() {
                       placeholderTextColor="#666"
                       value={nickname}
                       onChangeText={setNickname}
-                      returnKeyType="next"
-                      onSubmitEditing={() => accountRef.current?.focus()}
+                      returnKeyType="next" // 將鍵盤確認鍵設為「下一個」
+                      onSubmitEditing={() => accountRef.current?.focus()} // 按下後跳至帳號框
                     />
                   </View>
                 </View>
@@ -127,15 +140,15 @@ export default function RegisterScreen() {
                   <View style={styles.inputContainer}>
                     <Text style={styles.label}>帳號</Text>
                     <TextInput
-                      ref={accountRef}
+                      ref={accountRef} // 綁定 reference 接收焦點
                       style={styles.input}
                       placeholder="設定登入帳號"
                       placeholderTextColor="#666"
                       value={account}
                       onChangeText={setAccount}
-                      autoCapitalize="none"
-                      returnKeyType="next"
-                      onSubmitEditing={() => passwordRef.current?.focus()}
+                      autoCapitalize="none" // 關閉自動首字母大寫
+                      returnKeyType="next" // 將鍵盤確認鍵設為「下一個」
+                      onSubmitEditing={() => passwordRef.current?.focus()} // 按下後跳至密碼框
                     />
                   </View>
                 </View>
@@ -146,24 +159,24 @@ export default function RegisterScreen() {
                 <View style={styles.column}>
                   <View style={styles.inputContainer}>
                     <Text style={styles.label}>密碼</Text>
-                    {/* 💡 密碼欄位外層包裹 */}
+                    {/* 密碼欄位外層包裹：讓眼球圖標能絕對定位於此框內 */}
                     <View style={styles.passwordWrapper}>
                       <TextInput
-                        ref={passwordRef}
-                        style={[styles.input, styles.passwordInputSpecial]} // 右側內縮
+                        ref={passwordRef} // 綁定 reference
+                        style={[styles.input, styles.passwordInputSpecial]} // 加上密碼框專用樣式 (右側留白)
                         placeholder="請輸入密碼"
                         placeholderTextColor="#666"
                         value={password}
                         onChangeText={setPassword}
-                        secureTextEntry={!isPasswordVisible} // 💡 切換星號或明文
-                        autoCapitalize="none"
+                        secureTextEntry={!isPasswordVisible} // 切換星號或明文
+                        autoCapitalize="none" // 關閉自動首字母大寫
                         returnKeyType="next"
-                        onSubmitEditing={() => confirmPasswordRef.current?.focus()}
+                        onSubmitEditing={() => confirmPasswordRef.current?.focus()} // 按下後跳至確認密碼框
                       />
-                      {/* 💡 密碼眼球按鈕 */}
+                      {/* 顯示/隱藏密碼的眼球圖標按鈕 */}
                       <TouchableOpacity
                         style={styles.eyeIconContainer}
-                        onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                        onPress={() => setIsPasswordVisible(!isPasswordVisible)} // 點擊時切換密碼可見狀態
                         activeOpacity={0.6}
                       >
                         <FontAwesome
@@ -179,24 +192,24 @@ export default function RegisterScreen() {
                 <View style={styles.column}>
                   <View style={styles.inputContainer}>
                     <Text style={styles.label}>確認密碼</Text>
-                    {/* 💡 確認密碼欄位外層包裹 */}
+                    {/* 確認密碼欄位外層包裹 */}
                     <View style={styles.passwordWrapper}>
                       <TextInput
-                        ref={confirmPasswordRef}
-                        style={[styles.input, styles.passwordInputSpecial]} // 右側內縮
+                        ref={confirmPasswordRef} // 綁定 reference
+                        style={[styles.input, styles.passwordInputSpecial]} // 加上密碼框專用樣式 (右側留白)
                         placeholder="再次輸入密碼"
                         placeholderTextColor="#666"
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
-                        secureTextEntry={!isConfirmPasswordVisible} // 💡 切換星號或明文
-                        autoCapitalize="none"
-                        returnKeyType="done"
-                        onSubmitEditing={handleRegister}
+                        secureTextEntry={!isConfirmPasswordVisible} // 切換星號或明文
+                        autoCapitalize="none" // 關閉自動首字母大寫
+                        returnKeyType="done" // 確認鍵變為「完成」
+                        onSubmitEditing={handleRegister} // 填完後直接送出註冊
                       />
-                      {/* 💡 確認密碼眼球按鈕 */}
+                      {/* 顯示/隱藏確認密碼的眼球圖標按鈕 */}
                       <TouchableOpacity
                         style={styles.eyeIconContainer}
-                        onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)}
+                        onPress={() => setIsConfirmPasswordVisible(!isConfirmPasswordVisible)} // 點擊時切換確認密碼可見狀態
                         activeOpacity={0.6}
                       >
                         <FontAwesome

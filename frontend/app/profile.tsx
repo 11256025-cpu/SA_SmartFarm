@@ -1,5 +1,6 @@
 /*
  * frontend/app/profile.tsx - 使用者個人資料頁面。
+ * 提供檢視與編輯暱稱、更換大頭貼，以及登出帳號的功能。
  */
 import { FontAwesome, Ionicons } from '@expo/vector-icons'; // 新增 icon 函式庫以顯示大頭貼
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -11,20 +12,31 @@ import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing, typography } from '../components/sharedStyles';
 
+// 定義後端 API 基礎位址，自動判斷執行環境 (Android 模擬器或本機)
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 export default function ProfileScreen() {
+  // 取得全域推播通知函式
   const { addNotification } = useNotifications();
+  
+  // === 狀態管理 ===
+  // 使用者大頭貼的 Base64 圖片字串或 URI
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  // 使用者的顯示暱稱
   const [userName, setUserName] = useState('');
+  // 控制編輯暱稱彈窗的顯示與隱藏
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  // 儲存編輯彈窗中正在輸入的新暱稱
   const [editName, setEditName] = useState('');
+  // 使用者的登入帳號 (通常作為唯一識別，不可修改)
   const [loginAccount, setLoginAccount] = useState('');
+  // 控制頁面初始載入狀態，避免載入期間畫面顯示空白或預設值而產生閃爍
   const [isLoading, setIsLoading] = useState(true);
 
-  // 初始化：從後端或 AsyncStorage 取得資料
+  // 初始化：元件掛載時從本地快取 (AsyncStorage) 與後端 API 取得使用者資料
   useEffect(() => {
-    // 建立一個帶有 Timeout 功能的 fetch，避免後端沒開時無限等待
+    // 💡 實用技巧：建立一個帶有 Timeout 功能的 fetch 包裝函式
+    // 避免後端沒開或網路不穩時，fetch 一直處於 pending 導致畫面卡在「資料載入中」
     const fetchWithTimeout = (url: string, options: RequestInit = {}, timeout = 3000) => {
       return Promise.race([
         fetch(url, options),
@@ -36,7 +48,8 @@ export default function ProfileScreen() {
       try {
         let uid = await AsyncStorage.getItem('userId') || '1';
         
-        // 先從 AsyncStorage 取得快取，避免畫面空白等待
+        // 💡 效能優化 (Optimistic UI)：
+        // 先從 AsyncStorage 取得本地快取，讓使用者一點進頁面就能立刻看到自己的資料，無須等待網路請求
         const localName = await AsyncStorage.getItem('userName');
         const localAvatar = await AsyncStorage.getItem('avatarUri');
         const localAccount = await AsyncStorage.getItem('loginAccount');
@@ -49,12 +62,12 @@ export default function ProfileScreen() {
         if (localAvatar) setAvatarUri(localAvatar);
         if (localAccount) setLoginAccount(localAccount);
 
-        // 如果有本地快取，就先解除載入狀態，讓使用者瞬間看到畫面
+        // 如果有本地快取，就先解除 isLoading 狀態，讓使用者瞬間看到畫面
         if (hasLocalData) {
           setIsLoading(false);
         }
 
-        // 向後端請求最新資料
+        // 接著在背景向後端請求最新資料，確保若有在別的裝置修改過，畫面能同步更新
         const resp = await fetchWithTimeout(`${BASE_URL}/api/users/${uid}`, {}, 3000);
         
         if (!resp.ok) {
@@ -63,10 +76,10 @@ export default function ProfileScreen() {
         
         const data = await resp.json();
         
-        // 處理回傳資料結構，兼容 { success: true, user: {...} } 或直接回傳物件
+        // 處理回傳的資料結構，兼容 { success: true, user: {...} } 或直接回傳 user 物件的寫法
         let userData = data.user || data;
         
-        // 💡 許多資料庫 (如 MySQL) 查詢單筆資料時仍會回傳陣列，加上這行自動提取第一筆資料
+        // 許多資料庫 (如 MySQL) 查詢單筆資料時仍會回傳陣列格式，這裡加上檢查自動提取第一筆
         if (Array.isArray(userData)) {
           userData = userData[0];
         }
@@ -77,7 +90,7 @@ export default function ProfileScreen() {
             setUserName(userData.nickname);
             await AsyncStorage.setItem('userName', userData.nickname);
           }
-          // 改為對應資料庫的 account 欄位 (若無則降級尋找 username)
+          // 優先讀取對應資料庫的 account 欄位 (若無則降級尋找 username)
           if (userData.account) {
             setLoginAccount(userData.account);
             await AsyncStorage.setItem('loginAccount', userData.account);
@@ -91,6 +104,7 @@ export default function ProfileScreen() {
           }
         }
       } catch (e) {
+        // 如果網路不穩或後端沒開，印出警告，但此時畫面上還是會顯示剛才載入的快取資料
         console.log('取得使用者資料失敗，使用本地快取。', e);
       } finally {
         setIsLoading(false); // 確保發生錯誤時也能解除載入狀態
@@ -100,10 +114,13 @@ export default function ProfileScreen() {
     loadProfile();
   }, []);
 
+  // 處理更換大頭貼的操作邏輯
   const handleChangeAvatar = async () => {
+    // 1. 請求手機相簿存取權限
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
     
     if (permissionResult.granted === false) {
+      // 若遭拒絕，提示使用者
       addNotification({
         title: '權限不足',
         message: '系統需要手機相簿存取權限才能更換大頭貼！',
@@ -112,29 +129,34 @@ export default function ProfileScreen() {
       return;
     }
 
+    // 2. 開啟相簿選擇器
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images, // 僅允許選擇圖片
+      allowsEditing: true, // 允許裁切
+      aspect: [1, 1],      // 強制裁切比例為正方形 1:1，適合大頭貼
       quality: 0.3, // 降低畫質避免 base64 字串過大撐爆資料庫
-      base64: true, // 💡 關鍵：要求直接將圖片轉成 Base64 編碼的文字格式
+      base64: true, // 關鍵設定：要求直接將圖片轉成 Base64 編碼的文字格式回傳
     });
 
     if (!result.canceled) {
       const asset = result.assets[0];
-      // 組合完整的 Base64 字串，這樣就再也不會因為實體檔案遺失而破圖了
+      // 組合完整的 Base64 字串 (加入 MIME type)，這樣就再也不會因為手機內的實體檔案被刪除而破圖了
       const imagePayload = asset.base64 ? `data:image/jpeg;base64,${asset.base64}` : asset.uri;
       
+      // 更新前端畫面
       setAvatarUri(imagePayload);
       try {
+        // 優先儲存至本地端快取，讓下次開啟 App 時能馬上看見新照片
         await AsyncStorage.setItem('avatarUri', imagePayload);
         addNotification({
           title: '頭像更新成功',
           message: '您的大頭貼已更新並同步至系統。',
           type: 'success',
         });
+        
         let uid = await AsyncStorage.getItem('userId') || '1';
-        // 嘗試同步到後端 API
+        
+        // 嘗試將新頭像同步到後端 API，讓所有裝置都能讀到
         const response = await fetch(`${BASE_URL}/api/users/${uid}/avatar`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -154,7 +176,9 @@ export default function ProfileScreen() {
     }
   };
 
+  // 處理儲存編輯後的新暱稱邏輯
   const handleSaveProfile = async () => {
+    // 防呆機制：確保暱稱不能為空白或只有空白字元
     if (!editName.trim()) {
       addNotification({
         title: '暱稱不可空白',
@@ -163,10 +187,13 @@ export default function ProfileScreen() {
       });
       return;
     }
+    
+    // 先更新畫面狀態與關閉彈窗 (帶來更好的流暢度)
     setUserName(editName);
     setIsEditModalVisible(false);
     
     try {
+      // 同步到本地快取
       await AsyncStorage.setItem('userName', editName);
       addNotification({
         title: '暱稱更新成功',
@@ -174,7 +201,8 @@ export default function ProfileScreen() {
         type: 'success',
       });
       let uid = await AsyncStorage.getItem('userId') || '1';
-      // 同步到後端 API
+      
+      // 非同步發送到後端 API 儲存 (不 await 阻塞畫面)
       fetch(`${BASE_URL}/api/users/${uid}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -190,19 +218,25 @@ export default function ProfileScreen() {
     }
   };
 
-  // 處理跨平台的登出邏輯並清除快取
+  // 處理跨平台的登出邏輯並清除本地登入快取
   const handleLogout = async () => {
+    // 區分 Web 瀏覽器與原生手機 App 不同的系統提示框實作方式
     if (Platform.OS === 'web') {
+      // Web 環境使用 window.confirm
       const confirmed = window.confirm('確定要登出您的帳號嗎？');
       if (!confirmed) return;
+      
+      // 清除全部 AsyncStorage 紀錄 (包含 userId 等)
       await AsyncStorage.clear();
       addNotification({
         title: '登出成功',
         message: '您已成功登出。',
         type: 'info',
       });
+      // 將使用者導回登入頁
       router.replace('/(auth)/login');
     } else {
+      // iOS / Android 環境使用原生的 Alert 元件
       Alert.alert('登出確認', '確定要登出您的帳號嗎？', [
         { text: '取消', style: 'cancel' },
         { 
@@ -213,7 +247,7 @@ export default function ProfileScreen() {
     }
   };
 
-  // 如果還在讀取快取，則先顯示載入畫面，避免閃爍預設值
+  // 防閃爍處理：如果仍在讀取本地快取，則先顯示單純的載入畫面
   if (isLoading) {
     return (
       <PageShell>
@@ -224,6 +258,7 @@ export default function ProfileScreen() {
     );
   }
 
+  // === 畫面渲染區 ===
   return (
     <PageShell>
       <View style={styles.page}>
@@ -255,6 +290,7 @@ export default function ProfileScreen() {
                 <View style={styles.fieldBlock}>
                   <View style={styles.labelRow}>
                     <Text style={styles.label}>用戶暱稱</Text>
+                    {/* 點擊鉛筆圖標開啟編輯彈窗 */}
                     <TouchableOpacity onPress={() => { setEditName(userName); setIsEditModalVisible(true); }}>
                       <FontAwesome name="pencil" size={14} color={colors.primary} />
                     </TouchableOpacity>
@@ -297,6 +333,7 @@ export default function ProfileScreen() {
         <Modal visible={isEditModalVisible} transparent animationType="fade">
           <View style={styles.modalOverlay}>
             <View style={styles.modalCard}>
+              {/* 彈窗標題列 */}
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>編輯個人資料</Text>
                 <TouchableOpacity onPress={() => setIsEditModalVisible(false)} style={styles.closeBtn}>
@@ -304,6 +341,7 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
 
+              {/* 彈窗輸入內容 */}
               <View style={styles.modalBody}>
                 <Text style={styles.fieldLabel}>用戶暱稱</Text>
                 <TextInput 
@@ -315,6 +353,7 @@ export default function ProfileScreen() {
                 />
               </View>
 
+              {/* 彈窗底部按鈕 */}
               <View style={styles.modalFooter}>
                 <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsEditModalVisible(false)}><Text style={styles.cancelBtnText}>取消</Text></TouchableOpacity>
                 <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile}><Text style={styles.saveBtnText}>儲存修改</Text></TouchableOpacity>

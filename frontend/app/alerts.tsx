@@ -1,5 +1,5 @@
 /*
- * frontend/app/alerts.tsx - 警示頁面，顯示和設定警報條件。
+ * frontend/app/alerts.tsx - 警示頁面，顯示最近的警報紀錄並提供環境安全範圍的設定。
  */
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
@@ -11,39 +11,43 @@ import { useNotifications } from '../components/NotificationProvider';
 import PageShell from '../components/PageShell';
 import { colors, radii, spacing } from '../components/sharedStyles';
 
-// 自動判斷執行環境，避免 localhost 在實機上連不到
+// 定義後端 API 基礎位址，自動判斷執行環境 (Android 模擬器或本機)
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
-// 💡 新增：警示紀錄的型別定義
+// 警示紀錄的 TypeScript 型別定義
 interface AlertLog {
-  id: number;
-  msg: string;
-  date: string;
-  time: string;
+  id: number;     // 紀錄的唯一識別碼
+  msg: string;    // 警示訊息內容
+  date: string;   // 發生日期
+  time: string;   // 發生時間
 }
 
 export default function AlertsScreen() {
-  // 1. 警示閾值狀態：[下限, 上限]
+  // 取得全域推播通知函式
   const { addNotification } = useNotifications();
+  
+  // === 狀態管理區域 ===
+  // 1. 警示閾值狀態：儲存各環境指標的 [下限, 上限] 安全範圍
   const [tempRange, setTempRange] = useState([15, 35]);
   const [humidRange, setHumidRange] = useState([30, 80]);
   const [co2Range, setCo2Range] = useState([400, 1000]);
   const [lightRange, setLightRange] = useState([500, 50000]);
+  // 頁面載入狀態，避免載入完成前畫面閃爍
   const [loading, setLoading] = useState(true);
 
-  // 2. 啟動時讀取後端儲存的使用者設定，並套用到畫面滑塊
+  // 2. 初始化：元件掛載時讀取後端儲存的使用者設定，並將其數值套用到畫面滑軌上
   useEffect(() => {
     const loadSettings = async () => {
       try {
         let uid = await AsyncStorage.getItem('userId') || '1';
         
-        console.log(`📡 正在向後端請求使用者 ${uid} 的警示設定...`);
         const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${uid}`);
         const data = await resp.json();
         
         if (data.success && data.settings) {
           const s = data.settings;
           
+          // 確認後端回傳的資料為陣列且長度為 2，才將其轉為數字寫入狀態
           if (Array.isArray(s.tempRange) && s.tempRange.length === 2) {
             setTempRange([Number(s.tempRange[0]), Number(s.tempRange[1])]);
           }
@@ -56,13 +60,13 @@ export default function AlertsScreen() {
           if (Array.isArray(s.lightRange) && s.lightRange.length === 2) {
             setLightRange([Number(s.lightRange[0]), Number(s.lightRange[1])]);
           }
-          console.log("✅ 成功從資料庫載入設定並套用到設定頁面！");
         } else {
           console.log("ℹ️ 該使用者在資料庫尚無設定紀錄，使用前端預設值。");
         }
       } catch (e) {
         console.warn('❌ 載入使用者警示設定失敗：', e);
       } finally {
+        // 無論成功或失敗，皆結束載入狀態以顯示畫面
         setLoading(false);
       }
     };
@@ -70,10 +74,11 @@ export default function AlertsScreen() {
     loadSettings();
   }, []);
 
-  // 3. 警示紀錄數據狀態 (預設為空陣列)
+  // 3. 警示紀錄資料狀態 (預設為空陣列)
   const [alertLogs, setAlertLogs] = useState<AlertLog[]>([]);
 
-  // 每次進入頁面時，向後端取得最新的警示紀錄
+  // 💡 導航焦點效應 (useFocusEffect)：
+  // 與 useEffect 不同，它確保每次「切換回此頁面」時都會觸發，向後端取得最新的警示紀錄
   useFocusEffect(
     useCallback(() => {
       const loadAlertLogs = async () => {
@@ -89,6 +94,7 @@ export default function AlertsScreen() {
           }
         } catch (e) {
           console.warn('❌ 載入警示紀錄失敗：', e);
+          // 連線失敗時顯示警告通知
           addNotification({
             title: '載入失敗',
             message: '⚠️ 無法讀取警示紀錄，請確認後端是否已啟動在 http://localhost:3000。',
@@ -100,8 +106,9 @@ export default function AlertsScreen() {
     }, [])
   );
 
-  // 💡 新增：清空警示紀錄的功能，並連接到後端資料庫
+  // 處理清空所有警示紀錄的操作
   const handleClearLogs = async () => {
+    // 負責發送 DELETE 請求到後端的非同步函式
     const performClearLogs = async () => {
       try {
         const uid = await AsyncStorage.getItem('userId') || '1';
@@ -114,6 +121,7 @@ export default function AlertsScreen() {
 
         const data = await response.json();
         if (data.success) {
+          // 成功後，同步清空前端狀態，讓畫面上的紀錄瞬間消失
           setAlertLogs([]); // 同步清空前端狀態
           addNotification({
             title: '警示紀錄清空成功',
@@ -137,12 +145,14 @@ export default function AlertsScreen() {
       }
     };
 
+    // 針對不同平台顯示不同的確認對話框
     if (Platform.OS === 'web') {
+      // Web 環境使用 window.confirm
       if (window.confirm("此操作將會永久刪除所有警示紀錄，且無法復原。確定要繼續嗎？")) {
         performClearLogs();
       }
     } else {
-      // 跳出再次確認的對話框，防止誤觸
+      // 原生手機環境 (iOS/Android) 使用 Alert 元件跳出再次確認的對話框，防止誤觸
       Alert.alert(
         "確認清空紀錄",
         "此操作將會永久刪除所有警示紀錄，且無法復原。確定要繼續嗎？",
@@ -158,16 +168,18 @@ export default function AlertsScreen() {
     }
   };
 
-  // 4. 渲染「左右包夾」的範圍設定滑軌元件 (加入型別定義避免紅底)
+  // 4. 幫助建立「雙向範圍設定滑軌」的共用渲染函式，減少重複的 UI 程式碼
   const renderRangeSetting = (label: string, values: number[], setter: (vals: number[]) => void, min: number, max: number, unit: string, step: number = 1) => (
     <View style={styles.settingCard}>
       <View style={styles.settingHeaderRow}>
         <Text style={styles.settingLabel}>{label}</Text>
+        {/* 顯示目前選取的範圍值 */}
         <Text style={styles.rangeValueText}>允許範圍：{values[0]} ~ {values[1]} {unit}</Text>
       </View>
       
       <View style={styles.sliderRow}>
         <Text style={styles.limitText}>{min}</Text>
+        {/* 第三方套件 MultiSlider：支援雙向拖曳的滑桿 */}
         <MultiSlider
           values={[values[0], values[1]]}
           sliderLength={320} 
@@ -188,6 +200,7 @@ export default function AlertsScreen() {
             marginTop: 4 
           }}
         />
+        {/* 如果上限值太大 (例如 100000)，將其縮寫為 100k，避免撐破版面 */}
         <Text style={styles.limitText}>{max > 9999 ? (max/1000)+'k' : max}</Text> 
       </View>
       
@@ -197,14 +210,13 @@ export default function AlertsScreen() {
     </View>
   );
 
-  // 5. 處理儲存設定到資料庫的邏輯
+  // 5. 將警示條件的設定儲存回資料庫的邏輯
   const handleSaveSettings = async () => {
     try {
-      console.log("🔘 點擊了儲存按鈕，準備發送 API...");
-      
       const apiUrl = `${BASE_URL}/api/alerts/settings`;
       const uid = await AsyncStorage.getItem('userId');
       
+      // 將目前畫面上所有的範圍數值打包成一個物件
       const payload = {
         userId: uid ? Number(uid) : 1, 
         tempRange,
@@ -213,6 +225,7 @@ export default function AlertsScreen() {
         lightRange 
       };
 
+      // 發送 POST 請求寫入資料庫
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
@@ -224,6 +237,7 @@ export default function AlertsScreen() {
       const data = await response.json();
 
       if (data.success) {
+        // 儲存成功，發送系統通知
         addNotification({
           title: '警示條件儲存成功',
           message: '✅ 警示條件已成功儲存到資料庫。',
@@ -246,12 +260,14 @@ export default function AlertsScreen() {
     }
   };
 
+  // 如果資料尚未載入完成，顯示載入中的提示畫面
   if (loading) {
     return (
       <PageShell active="alerts" left={<Text style={{color: '#fff', margin: 20}}>載入設定中...</Text>} right={<></>} />
     );
   }
 
+  // === 畫面渲染區 ===
   return (
     <PageShell
       active="alerts"
@@ -265,12 +281,14 @@ export default function AlertsScreen() {
               <FontAwesome name="trash-o" size={18} color={colors.muted} />
             </TouchableOpacity>
           </View>
-          {/* 💡 效能優化：將 ScrollView + map 改為 FlatList，大幅提升長列表渲染效能 */}
+          {/* 💡 效能優化：FlatList 虛擬列表 */}
+          {/* 相較於 ScrollView + map，FlatList 只會渲染畫面可見範圍內的項目，能大幅提升長列表的渲染效能 */}
           <FlatList
             data={alertLogs}
             keyExtractor={(item) => String(item.id)}
             style={styles.logsScrollArea}
             showsVerticalScrollIndicator={true}
+            {/* 若無紀錄時顯示的空狀態提示 */}
             ListEmptyComponent={<Text style={styles.emptyText}>暫無警示紀錄。</Text>}
             renderItem={({ item: log }) => (
               <View style={styles.logItem}>

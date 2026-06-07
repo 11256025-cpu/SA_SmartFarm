@@ -16,24 +16,28 @@ export {
     ErrorBoundary
 } from 'expo-router';
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// 在字體等資源尚未載入完成前，防止啟動畫面 (Splash Screen) 自動隱藏。
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  // 載入應用程式所需的字體 (例如 FontAwesome 圖標字體)
   const [loaded, error] = useFonts({
     ...FontAwesome.font,
   });
 
+  // 如果載入字體發生錯誤，將錯誤拋出以便 ErrorBoundary 捕捉
   useEffect(() => {
     if (error) throw error;
   }, [error]);
 
+  // 當所有資源載入完成後，隱藏啟動畫面
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
     }
   }, [loaded]);
 
+  // 如果資源尚未載入完成，回傳 null 以保持啟動畫面顯示
   if (!loaded) {
     return null;
   }
@@ -42,10 +46,13 @@ export default function RootLayout() {
 }
 
 function RootLayoutNav() {
+  // 取得裝置當前的顏色主題 (深色或淺色模式)
   const colorScheme = useColorScheme();
 
   return (
+    // 根據系統主題套用對應的導覽主題設定
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      {/* 包裹通知上下文 Provider，讓整個 APP 都能使用推播通知功能 */}
       <NotificationProvider>
         <Stack>
           {/* 首頁 */}

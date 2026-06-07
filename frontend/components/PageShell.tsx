@@ -1,5 +1,6 @@
 /*
- * frontend/components/PageShell.tsx - 應用程式主頁框架，包含導覽列與通知邏輯。
+ * frontend/components/PageShell.tsx - 應用程式主頁框架 (Layout Wrapper)。
+ * 負責全域的版面切分 (左中右)、整合 TopNav、以及在背景定期抓取警報與顯示浮動通知面板。
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
@@ -11,19 +12,21 @@ import TopNav from '../components/TopNav';
 import { NotificationType, useNotifications } from './NotificationProvider';
 import { colors, radii, spacing } from './sharedStyles';
 
+// 定義 PageShell 接受的 Props
 type Props = {
-  left?: React.ReactNode;
-  center?: React.ReactNode;
-  right?: React.ReactNode;
-  children?: React.ReactNode; // fallback
-  active?: string;
-  showNav?: boolean;
-  onBellPress?: () => void;
-  hasUnreadAlerts?: boolean;
-  leftFlex?: number;
-  rightFlex?: number;
+  left?: React.ReactNode;      // 左側區塊內容
+  center?: React.ReactNode;    // 中間區塊內容
+  right?: React.ReactNode;     // 右側區塊內容
+  children?: React.ReactNode;  // 若不切分左右，可直接傳入 children (會以全寬顯示)
+  active?: string;             // 傳遞給 TopNav，標示當前頁面
+  showNav?: boolean;           // 是否顯示上方導覽列 (預設 true)
+  onBellPress?: () => void;    // 覆寫預設的鈴鐺點擊事件
+  hasUnreadAlerts?: boolean;   // 覆寫預設的未讀紅點邏輯
+  leftFlex?: number;           // 自訂左側區塊的 Flex 寬度比例 (預設 3.8)
+  rightFlex?: number;          // 自訂右側區塊的 Flex 寬度比例 (預設 6.2)
 };
 
+// 判斷後端 API 基礎位址
 const BASE_URL = Platform.OS === 'android'
   ? 'http://10.0.2.2:3000'
   : Platform.OS === 'web' && typeof window !== 'undefined'
@@ -31,7 +34,10 @@ const BASE_URL = Platform.OS === 'android'
     : 'http://localhost:3000';
 
 export default function PageShell({ left, center, right, children, active, showNav, onBellPress, hasUnreadAlerts, leftFlex, rightFlex }: Props) {
+  // === 狀態管理 ===
+  // 儲存從後端背景抓來的模擬器最新狀態
   const [simulatorState, setSimulatorState] = useState<{ temperature: number; humidity: number; co2: number; light: number } | null>(null);
+  // 儲存使用者的警示安全範圍設定
   const [warningSettings, setWarningSettings] = useState({
     tempRange: [15, 35],
     humidRange: [30, 80],
@@ -39,6 +45,7 @@ export default function PageShell({ left, center, right, children, active, showN
     lightRange: [500, 50000],
   });
 
+  // 取得全域通知相關的狀態與操作方法
   const {
     notifications,
     unreadCount,
@@ -50,6 +57,7 @@ export default function PageShell({ left, center, right, children, active, showN
     togglePanel,
   } = useNotifications();
 
+  // 核心邏輯：比對目前環境數值與安全範圍，回傳超出標準的項目陣列 (例如 ['temperature', 'humidity'])
   const computeActiveAlerts = (state: { temperature: number; humidity: number; co2: number; light: number } | null, settings: typeof warningSettings) => {
     if (!state) return [];
     const alerts: string[] = [];
@@ -60,6 +68,7 @@ export default function PageShell({ left, center, right, children, active, showN
     return alerts;
   };
 
+  // 小工具：根據通知的類型回傳對應的 Emoji 圖示
   const getNotificationEmoji = (type: NotificationType) => {
     switch (type) {
       case 'alert': return '🚨';
@@ -71,6 +80,7 @@ export default function PageShell({ left, center, right, children, active, showN
     }
   };
 
+  // 工廠函式：動態產生對應異常類型的通知內容與點擊按鈕的動作
   const getAlertContent = (type: string) => {
     const state = simulatorState || { temperature: 25, humidity: 25, co2: 800, light: 100000 };
     const thresholds = warningSettings;
@@ -109,9 +119,11 @@ export default function PageShell({ left, center, right, children, active, showN
     }
   };
 
+  // 背景載入警報邏輯：同時向後端拉取最新環境數值與警報範圍設定
   const loadWarningAlerts = async () => {
     try {
       const uid = (await AsyncStorage.getItem('userId')) || '1';
+      // 使用 Promise.all 讓兩個請求並行處理，節省等待時間
       const [stateResp, settingsResp] = await Promise.all([
         fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`),
         fetch(`${BASE_URL}/api/alerts/settings?userId=${uid}`),
@@ -123,10 +135,14 @@ export default function PageShell({ left, center, right, children, active, showN
       const state = stateData?.success ? stateData.state : stateData?.state || null;
       const settings = settingsData?.success && settingsData.settings ? settingsData.settings : warningSettings;
 
+      // 將取得的資料存入 Local State
       if (state) setSimulatorState(state);
       setWarningSettings(settings);
 
+      // 計算是否有異常
       const alerts = computeActiveAlerts(state, settings);
+      
+      // 將異常項目打包成 NotificationItem 格式
       const alertNotifications = alerts.map((type) => {
         const info = getAlertContent(type);
         return {
@@ -138,6 +154,7 @@ export default function PageShell({ left, center, right, children, active, showN
         };
       });
 
+      // 使用 replaceNotificationsOfType 取代舊有的警報，避免同類型的警告瘋狂堆疊
       replaceNotificationsOfType('alert', alertNotifications);
       return alerts;
     } catch (_error) {
@@ -146,51 +163,63 @@ export default function PageShell({ left, center, right, children, active, showN
     }
   };
 
+  // 利用 Ref 記錄上一秒的通知數量與 Timer ID (不會觸發畫面重新渲染)
   const prevNotificationCountRef = React.useRef(notifications.length);
   const autoCloseTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
+  // 自動關閉通知面板的邏輯
   useEffect(() => {
     // 當通知數量增加時，自動打開面板
     if (notifications.length > prevNotificationCountRef.current && !panelVisible) {
       openPanel();
       
-      // 清除之前的計時器
+      // 若原本就有設定自動關閉的計時器，先清除掉，重新計算 3 秒
       if (autoCloseTimerRef.current) {
         clearTimeout(autoCloseTimerRef.current);
       }
       
-      // 3秒後自動收起
+      // 設定 3 秒後自動收起面板
       autoCloseTimerRef.current = setTimeout(() => {
         closePanel();
       }, 3000);
     }
     
+    // 更新 Ref 以備下次比對
     prevNotificationCountRef.current = notifications.length;
   }, [notifications.length, panelVisible, openPanel, closePanel]);
 
+  // 當使用者導航回此頁面時，主動檢查一次有沒有新警報
   useFocusEffect(
     useCallback(() => {
       loadWarningAlerts();
     }, [])
   );
 
+  // 決定小紅點顯示狀態 (如果上層有傳 Props 就用上層的，否則用 Context 裡的 unreadCount)
   const resolvedHasUnreadAlerts = hasUnreadAlerts !== undefined ? hasUnreadAlerts : unreadCount > 0;
+  
+  // 決定鈴鐺被點擊時的動作 (預設為重新抓取警報並切換面板開關)
   const resolvedOnBellPress = onBellPress ? onBellPress : async () => {
     await loadWarningAlerts();
     togglePanel();
   };
 
+  // === 畫面渲染區 ===
   return (
     <SafeAreaView style={styles.container}>
       {showNav !== false ? <TopNav active={active || ''} onBellPress={resolvedOnBellPress} hasUnreadAlerts={resolvedHasUnreadAlerts} /> : null}
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.mainLayout}>
+          {/* 依據傳入的 Props 動態切分版面，並套用自訂的 Flex 比例 */}
           {left ? <View style={[styles.leftPanel, leftFlex !== undefined && { flex: leftFlex }]}>{left}</View> : null}
           {center ? <View style={styles.centerPanel}>{center}</View> : null}
           {right ? <View style={[styles.rightPanel, rightFlex !== undefined && { flex: rightFlex }]}>{right}</View> : null}
+          {/* 若沒有任何分區，直接將 children 全螢幕呈現 */}
           {!left && !right && <View style={styles.full}>{children}</View>}
         </View>
       </ScrollView>
+      
+      {/* --- 右側浮動通知面板 (使用 Reanimated 提供進出場動畫) --- */}
       {panelVisible && (
         <Animated.View 
           entering={FadeInRight.duration(400)} 
@@ -205,6 +234,7 @@ export default function PageShell({ left, center, right, children, active, showN
                   key={notification.id}
                   style={[
                     styles.notificationItem,
+                    // 根據通知類型套用不同的左方邊框顏色
                     notification.type === 'alert' && styles.notificationAlert,
                     notification.type === 'success' && styles.notificationSuccess,
                     notification.type === 'warning' && styles.notificationWarning,
@@ -216,6 +246,8 @@ export default function PageShell({ left, center, right, children, active, showN
                     {getNotificationEmoji(notification.type)} {notification.title}
                   </Text>
                   <Text style={styles.notificationText} numberOfLines={3}>{notification.message}</Text>
+                  
+                  {/* 若該通知帶有按鈕行為 (如：前往查看)，則渲染按鈕 */}
                   {notification.action ? (
                     <View style={styles.notificationButtonsRow}>
                       <TouchableOpacity style={[styles.notificationButton, styles.notificationPrimary]} onPress={notification.action}>

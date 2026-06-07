@@ -19,29 +19,37 @@ const BASE_URL = Platform.OS === 'android'
     : 'http://localhost:3000';
 
 export default function EnvironmentScreen() {
-  // 1. 環境狀態變數 (控制面板的當前數值)
+  // 1. 環境狀態變數：負責儲存與顯示控制面板及感測器當前的環境數值
   const [temperature, setTemperature] = useState(25);
   const [light, setLight] = useState(100000);
   const [humidity, setHumidity] = useState(25);
   const [co2, setCo2] = useState(800);
 
-  // 2. 灌溉排程變數
+  // 2. 灌溉排程變數：儲存自動灌溉的頻率、持續時間與目標濕度
   const [frequency, setFrequency] = useState(2);
   const [duration, setDuration] = useState(10);
   const [targetHumidity, setTargetHumidity] = useState(60);
+  
+  // 取得全域通知函式，用來在畫面上方顯示推播通知
   const { addNotification } = useNotifications();
+  
+  // 紀錄目前已觸發的警示類型 (如：'temperature', 'humidity')，避免重複發送通知
   const [activeThresholdAlerts, setActiveThresholdAlerts] = useState<string[]>([]);
   
-  // 💡 用來追蹤使用者是否正在操作控制面板，避免同步時覆蓋掉使用者的滑動位置
+  // 用來追蹤使用者是否正在拖曳控制面板的滑軌
+  // 如果正在操作，則暫停來自後端的數值同步更新，以免發生畫面拉扯
   const [isInteracting, setIsInteracting] = useState(false);
-  // 3. 追蹤是否已載入儲存的設定 (避免多次保存)
+  
+  // 追蹤是否已完成從本地 (AsyncStorage) 載入上次的設定值
+  // 避免在初始化尚未完成時，就觸發自動保存而覆蓋掉正確的舊設定
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // 💡 新增：控制「儲存設定成功彈窗」的顯示狀態與內文
+  // 控制「儲存設定成功」時彈出視窗 (Modal) 的顯示與隱藏狀態，以及對應的提示訊息
   const [saveModalVisible, setSaveModalVisible] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
-  // 3. 警示閾值狀態 (預設先給寬鬆一點，等 API 回傳後覆蓋)
+  // 3. 警示閾值狀態：定義各項環境數據的安全範圍
+  // (預設先給予較寬鬆的範圍，待元件掛載後會透過 API 向後端獲取真實設定並覆蓋)
   const [thresholds, setThresholds] = useState({
     tempRange: [15, 35],
     humidRange: [30, 80],
@@ -49,27 +57,30 @@ export default function EnvironmentScreen() {
     lightRange: [500, 50000]
   });
 
-  // 💡 新增：同步模擬器最新數據的函式 (解決自動灌溉數值未更新問題)
+  // 同步模擬器最新數據的函式
+  // 會向後端抓取目前最新的模擬環境狀態，解決如「自動灌溉後濕度未即時更新」的問題
   const syncSimulatorState = async () => {
-    // 如果使用者正在滑動控制面板，先跳過同步，以維持操作流暢度
+    // 防呆：如果使用者正在滑動控制面板，則先跳過本次同步，維持前端操作流暢度
     if (isInteracting) return;
 
     try {
+      // 從本地取得使用者 ID
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) return;
 
+      // 呼叫後端 API 取得該使用者的模擬環境狀態
       const stateResp = await fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`);
       const stateData = await stateResp.json();
       
       if (stateData.success && stateData.state) {
         const s = stateData.state;
-        // 更新狀態，React 會自動處理數值變動與渲染
+        // 更新 React 狀態，若從後端拿到的值存在，則覆寫當前畫面上的數值
         if (s.temperature !== undefined) setTemperature(Number(s.temperature));
         if (s.humidity !== undefined) setHumidity(Number(s.humidity));
         if (s.co2 !== undefined) setCo2(Number(s.co2));
         if (s.light !== undefined) setLight(Number(s.light));
 
-        // 同時更新本地快取暫存，確保資料一致
+        // 將從後端取得的最新數值一併更新到本地快取 (AsyncStorage) 中，確保下次重開 App 資料一致
         saveControlSettings({ 
           temperature: Number(s.temperature), 
           humidity: Number(s.humidity), 
@@ -82,17 +93,20 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 4. 向後端請求使用者最新的設定 (已完成多使用者綁定)
+  // 4. 向後端請求使用者的完整設定 (包含警示範圍、灌溉排程與最新環境狀態)
   const fetchSettings = async () => {
     try {
+      // 檢查是否已登入，若無登入則將使用者導向登入頁面
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
         router.replace('/(auth)/login');
         return;
       }
+      // 步驟 1：向後端請求警示範圍設定
       const resp = await fetch(`${BASE_URL}/api/alerts/settings?userId=${uid}`);
       const data = await resp.json();
 
+      // 若成功取得，則覆寫 thresholds 狀態
       if (data.success && data.settings) {
         setThresholds({
           tempRange: data.settings.tempRange || [15, 35],
@@ -102,11 +116,12 @@ export default function EnvironmentScreen() {
         });
       }
 
-      // 再抓一次使用者的排程設定，若有則覆蓋 frequency/duration
+      // 步驟 2：向後端請求使用者的灌溉排程設定，若有值則覆蓋前端的排程頻率與時長
       try {
         const schedResp = await fetch(`${BASE_URL}/api/schedule?userId=${uid}`);
         const schedData = await schedResp.json();
         if (schedData.success && schedData.schedule) {
+          // 更新排程的頻率與持續時間
           if (typeof schedData.schedule.frequency === 'number') setFrequency(schedData.schedule.frequency);
           if (typeof schedData.schedule.duration === 'number') setDuration(schedData.schedule.duration);
         }
@@ -114,38 +129,43 @@ export default function EnvironmentScreen() {
         console.warn('載入排程設定失敗', e);
       }
 
-      // 再抓一次使用者的模擬器當前狀態，並覆蓋控制面板數值
+      // 步驟 3：向後端請求使用者的模擬器當前狀態，將其覆蓋到控制面板
       try {
         const stateResp = await fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`);
         const stateData = await stateResp.json();
         if (stateData.success && stateData.state) {
           const s = stateData.state;
+          // 套用後端傳來的環境數值
           if (s.temperature !== undefined) setTemperature(Number(s.temperature));
           if (s.humidity !== undefined) setHumidity(Number(s.humidity));
           if (s.co2 !== undefined) setCo2(Number(s.co2));
           if (s.light !== undefined) setLight(Number(s.light));
 
+          // 將這些數值與排程同步保存到本地端快取
           saveControlSettings({ temperature: Number(s.temperature), humidity: Number(s.humidity), co2: Number(s.co2), light: Number(s.light), frequency, duration });
         }
       } catch (e) {
         console.warn('載入模擬器當前狀態失敗', e);
       }
+      // 最後確保執行一次同步，補齊可能的狀態落差
       await syncSimulatorState();
     } catch (error) {
       console.warn('載入警示設定失敗，使用預設值。', error);
     }
   };
 
-  // 5. 放開滑軌時，通知後端暫存目前最新數值的非同步方法
+  // 5. 將控制面板的最新數值同步回後端模擬器的非同步函式 (例如：放開滑軌時觸發)
   const updateBackendSimulator = async (updatedValues: { temperature?: number; humidity?: number; co2?: number; light?: number }) => {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
+        // 若未登入，不允許更新，強制導回登入頁
         console.warn('未登入：無法更新模擬器，導回登入頁');
         router.replace('/(auth)/login');
         return;
       }
 
+      // 發送 POST 請求，將最新的改變值 (updatedValues) 告訴後端資料庫
       await fetch(`${BASE_URL}/api/simulator/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -159,22 +179,27 @@ export default function EnvironmentScreen() {
     }
   };
 
+  // 處理手動灌溉操作的函式
   const handleManualIrrigation = async () => {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
+        // 提示使用者先登入
         setSaveMessage('請先登入後再執行手動灌溉');
         setSaveModalVisible(true);
         return;
       }
 
+      // 發送請求呼叫後端手動灌溉 API
       const response = await fetch(`${BASE_URL}/api/irrigation/manual`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: uid, targetHumidity }),
       });
       const data = await response.json();
+      
       if (response.ok && data.success) {
+        // 若灌溉成功，更新畫面濕度，並通知後端模擬器更新該數值
         setHumidity(Number(data.newHumidity));
         updateBackendSimulator({ humidity: Number(data.newHumidity) });
         setSaveMessage(`手動灌溉成功，已將濕度調整至 ${data.newHumidity}% 並儲存紀錄。`);
@@ -185,6 +210,7 @@ export default function EnvironmentScreen() {
           action: () => router.replace('/environment'),
         });
       } else {
+        // 若後端拒絕或發生錯誤，顯示錯誤通知
         const message = `手動灌溉失敗：${data.message || '請稍後再試'}`;
         setSaveMessage(message);
         addNotification({
@@ -194,6 +220,7 @@ export default function EnvironmentScreen() {
         });
       }
     } catch (error) {
+      // 捕捉網路異常
       console.error('手動灌溉失敗:', error);
       const message = '無法連線到伺服器，請稍後再試。';
       setSaveMessage(message);
@@ -203,14 +230,17 @@ export default function EnvironmentScreen() {
         type: 'error',
       });
     } finally {
+      // 不論成功或失敗，皆打開訊息彈窗提示使用者
       setSaveModalVisible(true);
     }
   };
 
+  // 處理自動灌溉判斷的函式
   const handleAutoIrrigation = async () => {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
+        // 未登入的防呆檢查
         const message = '請先登入後再執行自動灌溉';
         setSaveMessage(message);
         addNotification({
@@ -222,6 +252,7 @@ export default function EnvironmentScreen() {
         return;
       }
 
+      // 檢查目前的土壤濕度是否已經在允許範圍之內，如果是，則無須灌溉
       if (!thresholds.humidRange || humidity >= thresholds.humidRange[0]) {
         const message = '土壤濕度已達標準，不需執行自動灌溉。';
         setSaveMessage(message);
@@ -234,14 +265,18 @@ export default function EnvironmentScreen() {
         return;
       }
 
+      // 設定自動灌溉的目標濕度，最高不超過 100%，並預設增加 20%
       const autoTargetHumidity = Math.min(100, thresholds.humidRange[1] || humidity + 20);
+      // 發送請求呼叫後端自動灌溉 API
       const response = await fetch(`${BASE_URL}/api/irrigation/auto`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: uid, targetHumidity: autoTargetHumidity }),
       });
       const data = await response.json();
+      
       if (response.ok && data.success) {
+        // 若執行成功，同樣更新畫面濕度與模擬器
         setHumidity(Number(data.newHumidity));
         updateBackendSimulator({ humidity: Number(data.newHumidity) });
         const message = `自動灌溉已執行並記錄：目標濕度 ${data.targetHumidity}%，目前濕度 ${data.newHumidity}%。`;
@@ -253,6 +288,7 @@ export default function EnvironmentScreen() {
           action: () => router.replace('/environment'),
         });
       } else {
+        // 自動灌溉被後端拒絕或發生邏輯錯誤
         const message = `自動灌溉失敗：${data.message || '請稍後再試'}`;
         setSaveMessage(message);
         addNotification({
@@ -262,6 +298,7 @@ export default function EnvironmentScreen() {
         });
       }
     } catch (error) {
+      // 捕捉網路異常
       console.error('自動灌溉失敗:', error);
       const message = '無法連線到伺服器，請稍後再試。';
       setSaveMessage(message);
@@ -271,11 +308,13 @@ export default function EnvironmentScreen() {
         type: 'error',
       });
     } finally {
+      // 打開提示彈窗
       setSaveModalVisible(true);
     }
   };
 
-  // 5.5 保存控制面板設定值到 AsyncStorage
+  // 5.5 將控制面板的設定值保存到本地快取 (AsyncStorage) 中
+  // 產生以使用者 ID 為基礎的專屬 Storage Key，避免不同帳號切換時互相干擾
   const getControlSettingsKey = (uid: string) => `controlSettings_${uid}`;
 
   const saveControlSettings = async (settings: { temperature?: number; humidity?: number; co2?: number; light?: number; frequency?: number; duration?: number; targetHumidity?: number }) => {
@@ -283,15 +322,20 @@ export default function EnvironmentScreen() {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) return;
       const storageKey = getControlSettingsKey(uid);
+      
+      // 先取出舊設定
       const currentSettings = await AsyncStorage.getItem(storageKey);
       const existing = currentSettings ? JSON.parse(currentSettings) : {};
+      // 將新的數值與舊的設定進行合併 (Merge)
       const updated = { ...existing, ...settings };
+      // 重新寫回 AsyncStorage
       await AsyncStorage.setItem(storageKey, JSON.stringify(updated));
     } catch (error) {
       console.error('保存控制面板設定失敗:', error);
     }
   };
 
+  // 根據超標的環境類型，回傳對應的警告標題與內文
   const getEnvironmentAlertContent = (type: 'temperature' | 'humidity' | 'co2' | 'light') => {
     switch (type) {
       case 'temperature':
@@ -317,11 +361,12 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 5.6 從 AsyncStorage 載入控制面板設定值
+  // 5.6 從 AsyncStorage 載入上次的控制面板設定值
   const loadControlSettings = async () => {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
+        // 若未登入，也將 isLoaded 設為 true 讓元件得以完成初次渲染
         setIsLoaded(true);
         return;
       }
@@ -329,6 +374,7 @@ export default function EnvironmentScreen() {
       const savedSettings = await AsyncStorage.getItem(storageKey);
       if (savedSettings) {
         const settings = JSON.parse(savedSettings);
+        // 將取出的各項設定賦值到前端狀態上
         if (settings.temperature !== undefined) setTemperature(settings.temperature);
         if (settings.humidity !== undefined) setHumidity(settings.humidity);
         if (settings.co2 !== undefined) setCo2(settings.co2);
@@ -340,58 +386,65 @@ export default function EnvironmentScreen() {
     } catch (error) {
       console.error('載入控制面板設定失敗，使用預設值。', error);
     } finally {
+      // 無論載入成功與否，皆標記為已載入完畢
       setIsLoaded(true);
     }
   };
 
-  // 6. 頁面首次加載時或切回時載入保存的設定
+  // 6. 生命週期：當元件掛載時，確保會載入本地的設定
   useEffect(() => {
     if (!isLoaded) {
       loadControlSettings();
     }
   }, [isLoaded]);
 
-  // 💡 新增：定時輪詢 (Polling) 機制
-  // 每 3 秒從後端抓取一次最新數據，解決「後端自動灌溉但前端數值未即時顯示」的問題
+  // 定時輪詢 (Polling) 機制
+  // 每 3 秒向後端抓取一次最新數據，藉此實現「不同裝置或排程更新時」畫面的即時同步
   useEffect(() => {
     if (!isLoaded) return;
 
+    // 設定定時器
     const pollInterval = setInterval(() => {
       syncSimulatorState();
     }, 3000);
 
+    // 清除定時器避免 Memory Leak
     return () => clearInterval(pollInterval);
   }, [isLoaded, isInteracting]);
 
-  // 7. 使用 useFocusEffect 確保每次點進這個頁面時，都會同步最新的設定
+  // 7. 導航焦點效應：確保每次從別的頁面點進來時，都能去後端拉取最新的使用設定
   useFocusEffect(
     useCallback(() => {
       fetchSettings();
     }, [])
   );
 
-  // 7.5 監聽控制面板值變化，自動保存到 AsyncStorage
+  // 7.5 監聽控制面板數值的任何變化，並利用 setTimeout 進行防抖 (Debounce)，自動存入 AsyncStorage
   useEffect(() => {
     if (isLoaded) {
+      // 延遲 500ms，若在這期間數值又變動則會重算，避免拖曳滑桿時瘋狂寫入
       const timeoutId = setTimeout(() => {
         saveControlSettings({
           temperature, humidity, co2, light, frequency, duration, targetHumidity
         });
       }, 500); 
       
+      // 清除前一次未執行的存檔任務
       return () => clearTimeout(timeoutId);
     }
   }, [temperature, humidity, co2, light, frequency, duration, targetHumidity, isLoaded]);
 
-  // 7.8 若環境數值超出警示範圍，立即寫入通知中心
+  // 7.8 環境異常監測：若環境數值超出警示範圍，主動觸發全域推播並寫入通知中心
   useEffect(() => {
     if (!isLoaded) return;
+    // 收集當前超標的類型
     const currentAlerts: ('temperature' | 'humidity' | 'co2' | 'light')[] = [];
     if (isWarning(temperature, thresholds.tempRange)) currentAlerts.push('temperature');
     if (isWarning(humidity, thresholds.humidRange)) currentAlerts.push('humidity');
     if (isWarning(co2, thresholds.co2Range)) currentAlerts.push('co2');
     if (isWarning(light, thresholds.lightRange)) currentAlerts.push('light');
 
+    // 篩選出「尚未觸發過」的警告類型，發送通知
     const newAlerts = currentAlerts.filter((key) => !activeThresholdAlerts.includes(key));
     newAlerts.forEach((type) => {
       const content = getEnvironmentAlertContent(type);
@@ -403,26 +456,30 @@ export default function EnvironmentScreen() {
         action: () => router.replace('/alerts'),
       });
     });
+    
+    // 更新已觸發警示的狀態，防止被相同的異常重複洗頻
     setActiveThresholdAlerts(currentAlerts);
   }, [temperature, humidity, co2, light, thresholds, isLoaded]);
 
-  // 8. 共用的異常判斷小工具
+  // 8. 共用的異常判斷小工具：判斷 current 值是否超出 range [min, max] 的陣列範圍
   const isWarning = (currentValue: number, range: number[]) => {
     if (!range || range.length !== 2) return false;
     return currentValue < range[0] || currentValue > range[1];
   };
 
-  // 💡 10. 修改處：將原本內建的 alert 改為我們自訂的彈窗 (Modal)
+  // 處理儲存排程按鈕的邏輯：將自訂排程寫入後端資料庫
   const handleSaveSchedule = async () => {
     try {
       const uid = await AsyncStorage.getItem('userId');
       if (!uid) {
+        // 未登入防呆
         setSaveMessage('請先登入以儲存排程');
         setSaveModalVisible(true);
         router.replace('/(auth)/login');
         return;
       }
 
+      // 將前端選定的 frequency 與 duration 送至後端 API
       const response = await fetch(`${BASE_URL}/api/schedule`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -434,7 +491,9 @@ export default function EnvironmentScreen() {
       });
 
       const data = await response.json();
+      
       if (response.ok && data.success) {
+        // 儲存成功，觸發推播並開啟成功彈窗
         const message = '儲存成功！排程已同步至資料庫。';
         setSaveMessage(message);
         addNotification({
@@ -445,6 +504,7 @@ export default function EnvironmentScreen() {
         });
         setSaveModalVisible(true);
       } else {
+        // 後端拒絕儲存
         const message = `儲存失敗: ${data.message || '未知錯誤'}`;
         setSaveMessage(message);
         addNotification({
@@ -455,6 +515,7 @@ export default function EnvironmentScreen() {
         setSaveModalVisible(true);
       }
     } catch (error) {
+      // 捕捉網路斷線等預期外錯誤
       console.error('儲存排程時發生錯誤:', error);
       const message = '無法連接到後端伺服器，請檢查網路連線。';
       setSaveMessage(message);
@@ -467,7 +528,7 @@ export default function EnvironmentScreen() {
     }
   };
 
-  // 控制面板滑軌元件
+  // 幫助建立滑軌元件的共用渲染函式，避免重複寫冗長的 UI 程式碼
   const renderSliderControl = (label: string, value: number, setter: (val: number) => void, min: number, max: number, unit: string, apiKey: 'temperature' | 'humidity' | 'co2' | 'light') => (
     <View style={styles.controlRow}>
       <View style={styles.controlLabelGroup}>
@@ -479,13 +540,13 @@ export default function EnvironmentScreen() {
         minimumValue={min}
         maximumValue={max}
         value={value}
-        onValueChange={setter}
         onValueChange={(v) => {
-          setIsInteracting(true); // 使用者開始手動調整
+          setIsInteracting(true); // 使用者開始手動調整，封鎖輪詢覆蓋
           setter(v);
         }}
         onSlidingComplete={(v) => { 
-          setIsInteracting(false); // 調整結束，恢復自動同步
+          setIsInteracting(false); // 調整結束，恢復背景的自動同步
+          // 在手放開滑鼠/手指的瞬間，通知後端寫入新值
           updateBackendSimulator({ [apiKey]: Math.round(v) } as Parameters<typeof updateBackendSimulator>[0]);
         }}
         step={1}

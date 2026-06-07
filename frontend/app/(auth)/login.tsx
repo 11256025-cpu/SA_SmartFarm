@@ -8,64 +8,77 @@ import { useNotifications } from '../../components/NotificationProvider';
 // 💡 引入 FontAwesome 來做眼球圖標
 import { FontAwesome } from '@expo/vector-icons';
 
+// 定義後端 API 的基礎 URL，依據不同平台（Android 模擬器或 iOS/Web 模擬器）設定不同的位址
 const BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:3000' : 'http://localhost:3000';
 
 export default function LoginScreen() {
+  // 宣告狀態變數來儲存使用者輸入的帳號與密碼
   const [account, setAccount] = useState('');
   const [password, setPassword] = useState('');
   
-  // 錯誤狀態提示
+  // 錯誤狀態提示：用來顯示帳號或密碼輸入錯誤時的訊息
   const [accountError, setAccountError] = useState('');
   const [passwordError, setPasswordError] = useState('');
 
-  // 💡 新增控制密碼是否可見的狀態（預設 false 代表隱藏、呈現星號）
+  // 新增控制密碼是否可見的狀態（預設 false 代表隱藏、呈現星號）
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
-  // 💡 新增：控制「登入成功彈窗」的顯示狀態與內文
+  // 控制「登入成功彈窗」的顯示狀態與內文訊息
   const [successModalVisible, setSuccessModalVisible] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // 取得全域通知功能的方法
   const { addNotification } = useNotifications();
 
-  // 建立密碼輸入框的錨點
+  // 建立密碼輸入框的錨點，用來在輸入完帳號後自動將游標跳至密碼框
   const passwordInputRef = useRef<TextInput>(null);
 
-  // 💡 新增：關閉彈窗並跳轉頁面的函式
+  // 關閉彈窗並跳轉至環境監控頁面的函式
   const handleCloseModalAndNavigate = () => {
-    setSuccessModalVisible(false);
-    router.replace('/environment');
+    setSuccessModalVisible(false);  // 隱藏成功彈窗
+    router.replace('/environment'); // 跳轉至環境監控頁面
   };
 
+  // 處理登入邏輯的非同步函式
   const handleLogin = async () => {
+    // 每次嘗試登入前，先清空之前的錯誤訊息
     setAccountError('');
     setPasswordError('');
 
+    // 去除輸入字串前後的空白字元
     const trimmedAccount = account.trim();
     const trimmedPassword = password.trim();
+    
+    // 檢查是否有未填寫的欄位
     if (!trimmedAccount || !trimmedPassword) {
       alert("請輸入帳號與密碼！");
       return;
     }
 
     try {
+      // 呼叫後端登入 API
       const response = await fetch(`${BASE_URL}/api/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          username: trimmedAccount,
-          password: trimmedPassword
+          username: trimmedAccount, // 傳送帳號
+          password: trimmedPassword // 傳送密碼
         })
       });
 
+      // 解析後端回傳的 JSON 資料
       const data = await response.json();
       console.log('login response', response.status, data);
 
       if (data.success) {
+        // 若登入成功，取得使用者 ID
         const userId = data.user?.user_id ?? data.user?.id ?? null;
 
         if (userId) {
           try {
+            // 將使用者相關資訊儲存至本地的 AsyncStorage，以便後續跨頁面或重開 App 時使用
             await AsyncStorage.setItem('userId', String(userId));
             if (data.user?.nickname) await AsyncStorage.setItem('userName', data.user.nickname);
             if (data.user?.account) await AsyncStorage.setItem('loginAccount', data.user.account);
@@ -75,19 +88,23 @@ export default function LoginScreen() {
           }
         }
 
+        // 發送登入成功的系統通知
         addNotification({
           title: '登入成功',
           message: '歡迎回來！您已成功登入系統。',
           type: 'success',
         });
 
-        // 💡 顯示成功彈窗並導向主頁
+        // 顯示成功彈窗並設定訊息
         setSuccessMessage('🎉 登入成功！');
         setSuccessModalVisible(true);
+        
+        // 延遲 2.5 秒後自動關閉彈窗並導向主頁
         setTimeout(() => {
           handleCloseModalAndNavigate();
         }, 2500);
       } else {
+        // 若登入失敗，依據後端回傳的訊息判斷是帳號錯誤還是密碼錯誤
         const msg = data.message || '';
         if (
           msg.includes('查無') ||
@@ -102,6 +119,7 @@ export default function LoginScreen() {
         }
       }
     } catch (error) {
+      // 捕捉網路連線等例外錯誤
       console.error("連線錯誤:", error);
       setPasswordError("無法連線到伺服器，請確認後端已啟動！");
       addNotification({
@@ -112,18 +130,22 @@ export default function LoginScreen() {
     }
   };
 
+  // 處理帳號輸入框文字改變的事件
   const handleAccountChange = (text: string) => {
-    setAccount(text);
-    if (accountError) setAccountError('');
+    setAccount(text); // 更新帳號狀態
+    if (accountError) setAccountError(''); // 清除帳號錯誤訊息
   };
 
+  // 處理密碼輸入框文字改變的事件
   const handlePasswordChange = (text: string) => {
-    setPassword(text);
-    if (passwordError) setPasswordError('');
+    setPassword(text); // 更新密碼狀態
+    if (passwordError) setPasswordError(''); // 清除密碼錯誤訊息
   };
 
+  // 渲染登入畫面
   return (
     <SafeAreaView style={styles.container}>
+      {/* 避免鍵盤遮擋輸入框的視圖元件 */}
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
@@ -150,10 +172,11 @@ export default function LoginScreen() {
                 value={account}
                 onChangeText={handleAccountChange} 
                 keyboardType="default"
-                autoCapitalize="none"
-                returnKeyType="next"
-                onSubmitEditing={() => passwordInputRef.current?.focus()}
+                autoCapitalize="none" // 關閉自動大寫
+                returnKeyType="next" // 將鍵盤的確認鍵改為 "Next" (下一個)
+                onSubmitEditing={() => passwordInputRef.current?.focus()} // 按下 Next 後跳至密碼框
               />
+              {/* 若有帳號錯誤，顯示錯誤訊息 */}
               {accountError ? (
                 <Text style={styles.errorText}>{accountError}</Text>
               ) : null}
@@ -166,22 +189,22 @@ export default function LoginScreen() {
               {/* 這裡將密碼輸入框與眼球按鈕包在一起，使其方便做相對定位 */}
               <View style={styles.passwordWrapper}>
                 <TextInput
-                  ref={passwordInputRef} 
+                  ref={passwordInputRef} // 綁定 ref，以便可以程式化 focus
                   style={[styles.input, styles.passwordInputSpecial]} // 額外擴充右邊留白防止文字跟眼球重疊
                   placeholder="請輸入您的密碼"
                   placeholderTextColor="#666"
                   value={password}
                   onChangeText={handlePasswordChange} 
-                  secureTextEntry={!isPasswordVisible} // 動態切換顯示或隱藏
-                  autoCapitalize="none"
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
+                  secureTextEntry={!isPasswordVisible} // 動態切換顯示或隱藏 (true 為隱藏)
+                  autoCapitalize="none" // 關閉自動大寫
+                  returnKeyType="done" // 將鍵盤的確認鍵改為 "Done" (完成)
+                  onSubmitEditing={handleLogin} // 按下 Done 後執行登入
                 />
                 
                 {/* 顯示/隱藏密碼的眼球圖標按鈕 */}
                 <TouchableOpacity 
                   style={styles.eyeIconContainer} 
-                  onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                  onPress={() => setIsPasswordVisible(!isPasswordVisible)} // 點擊時切換可見狀態
                   activeOpacity={0.6}
                 >
                   <FontAwesome 
@@ -192,6 +215,7 @@ export default function LoginScreen() {
                 </TouchableOpacity>
               </View>
               
+              {/* 若有密碼錯誤，顯示錯誤訊息 */}
               {passwordError ? (
                 <Text style={styles.errorText}>{passwordError}</Text>
               ) : null}
@@ -217,22 +241,26 @@ export default function LoginScreen() {
 
       {/* 自訂暗色系登入成功彈窗 */}
       <Modal
-        animationType="fade"
-        transparent={true}
-        visible={successModalVisible}
-        onRequestClose={handleCloseModalAndNavigate}
+        animationType="fade" // 設定淡入淡出動畫
+        transparent={true} // 設定背景透明
+        visible={successModalVisible} // 控制是否顯示
+        onRequestClose={handleCloseModalAndNavigate} // Android 實體返回鍵行為
       >
+        {/* 彈窗背景遮罩 */}
         <View style={styles.modalOverlay}>
+          {/* 使用 Reanimated 提供彈出動畫效果 */}
           <Animated.View 
             entering={ZoomIn.duration(400).springify()} 
             style={styles.modalCard}
           >
+            {/* 成功打勾圖示 */}
             <View style={styles.iconCircle}>
               <FontAwesome name="check" size={28} color="#FFFFFF" />
             </View>
             <Text style={styles.modalTitle}>系統提示</Text>
             <Text style={styles.modalMessage}>{successMessage}</Text>
             
+            {/* 確定按鈕 */}
             <TouchableOpacity style={styles.modalButton} onPress={handleCloseModalAndNavigate}>
               <Text style={styles.modalButtonText}>確 定</Text>
             </TouchableOpacity>

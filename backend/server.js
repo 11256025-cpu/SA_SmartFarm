@@ -1,16 +1,24 @@
 /*
  * backend/server.js - Express 伺服器入口，包含 SQLite 連線、資料表初始化、背景寫入與 API 路由設定。
+ * 這個檔案是智慧農場後端的核心，負責處理所有來自前端的請求，並與 SQLite 資料庫互動。
  */
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 
+// 建立 Express 應用程式實例
 const app = express();
 const port = 3000;
 
+// 啟用 CORS (跨來源資源共享) 中介軟體，允許來自不同網域的請求。
 app.use(cors());
+// 配置 Express 使用 JSON 格式的請求體解析器。
+// `limit: '10mb'` 限制請求體最大為 10MB，以處理可能較大的圖片 Base64 字串。
 app.use(express.json({ limit: '10mb' }));
 
+// 輔助函數：將輸入值解析為整數型的 user ID。
+// 如果解析失敗或不是有效的整數，則返回 null。
+// 這是為了避免 SQL 注入等安全問題，並確保 user ID 格式正確。
 const parseUserId = (value) => {
     const id = Number(value);
     return Number.isInteger(id) ? id : null;
@@ -19,15 +27,21 @@ const parseUserId = (value) => {
 // ==========================================
 // 💡 模擬環境變數記憶體暫存區 (全域變數)
 // ==========================================
+// `currentFarmStates` 是一個物件，用於在記憶體中快速存取每個使用者的最新環境數據。
 // 初始不預先建立任何使用者狀態，避免未登入就自動觸發定時寫入
 let currentFarmStates = {};
 
 // --- 連線到 SQLite 資料庫 ---
+// 連線到 SQLite 資料庫檔案 'farm.db'。
+// 如果檔案不存在，則會自動建立。
 const db = new sqlite3.Database('./farm.db', (err) => {
     if (err) {
+        // 如果連線失敗，輸出錯誤訊息到控制台。
         console.error("資料庫連線失敗:", err.message);
     } else {
+        // 如果連線成功，輸出成功訊息。
         console.log("成功連線到 SQLite 資料庫 (farm.db)！");
+        // 連線成功後，調用 `initializeDatabase` 函數，確保所有必要的資料表都存在。
         initializeDatabase(); // 連線成功後，啟動初始化資料表
     }
 });
@@ -36,6 +50,8 @@ const db = new sqlite3.Database('./farm.db', (err) => {
 function initializeDatabase() {
     db.serialize(() => {
         // 1. 建立歷史數據表
+        // 儲存智能農場環境感測器的歷史數據，如溫度、土壤濕度、光照和二氧化碳濃度。
+        // `record_time` 欄位用於記錄數據寫入時間。
         db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -47,6 +63,8 @@ function initializeDatabase() {
         )`);
 
         // 2. 建立警報設定範圍表
+        // 儲存使用者自定義的各項環境參數（溫度、濕度、二氧化碳、光照）的警示上下限。
+        // `user_id` 作為主鍵，保證每個使用者只有一組警示設定。
         db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
             user_id INTEGER PRIMARY KEY,
             temp_warning TEXT,
@@ -56,6 +74,8 @@ function initializeDatabase() {
         )`);
 
         // 3. 建立警報紀錄表 (解決你目前報錯的核心問題)
+        // 記錄系統觸發的所有警示訊息，包含觸發警示的使用者ID、訊息內容和紀錄時間。
+        // `record_time` 欄位用於記錄警示發生時間。
         db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
             log_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -64,6 +84,8 @@ function initializeDatabase() {
         )`);
 
         // 4. 建立灌溉紀錄表：手動/自動灌溉事件都會記錄
+        // 記錄每一次灌溉事件的詳細資訊，包括灌溉類型（手動/自動）、目標濕度、實際濕度變化、觸發條件和紀錄時間。
+        // `record_time` 欄位用於記錄灌溉發生時間。
         db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION_LOGS (
             irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -75,6 +97,8 @@ function initializeDatabase() {
         )`);
 
         // 5. 建立使用者表 (配合你的 /api/login 和 /api/register)
+        // 儲存使用者帳戶的基本資料，例如暱稱、帳號、密碼和頭像。
+        // `account` 欄位設定為 `UNIQUE`，確保帳號的唯一性。
         db.run(`CREATE TABLE IF NOT EXISTS USER (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nickname TEXT,
@@ -84,6 +108,8 @@ function initializeDatabase() {
         )`);
 
         // 5. 建立排程設定表
+        // 儲存使用者的自動灌溉排程設定，包含灌溉頻率和持續時間。
+        // `updated_at` 記錄最後更新時間。
         db.run(`CREATE TABLE IF NOT EXISTS SCHEDULE_SETTINGS (
             user_id INTEGER PRIMARY KEY,
             frequency TEXT,
@@ -92,6 +118,8 @@ function initializeDatabase() {
         )`);
 
         // 6. 建立作物資料表
+        // 儲存使用者種植的作物資訊，包括名稱、生長階段、狀態、圖片以及作物的歷史狀態變更紀錄（以 JSON 字串形式儲存）。
+        // `history` 欄位用於儲存 JSON 格式的歷史紀錄。
         db.run(`CREATE TABLE IF NOT EXISTS CROPS (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -103,16 +131,24 @@ function initializeDatabase() {
         )`);
 
         console.log("📋 資料庫資料表檢查與初始化完成！");
+        // 資料表初始化完成後，預載所有使用者的狀態到記憶體中。
         preloadAllUsersState(); // 💡 伺服器啟動時，自動把所有使用者載入記憶體
     });
 }
 
+// 預載所有使用者的狀態到 `currentFarmStates` 記憶體物件中。
+// 這使得伺服器啟動時，所有已註冊使用者的環境狀態可以立即被追蹤和更新。
 function preloadAllUsersState() {
     db.all(`SELECT id FROM USER`, [], (err, users) => {
         if (err) return console.error("❌ 預載使用者資料失敗:", err.message);
         if (users && users.length > 0) {
+            // 遍歷所有使用者，為每個使用者初始化其狀態。
             users.forEach(user => initializeUserState(String(user.id)));
             console.log(`🚀 伺服器啟動：已自動掛載 ${users.length} 位使用者的狀態至記憶體！開始自動背景紀錄...`);
+        }
+        // 如果沒有使用者，則輸出提示。
+        else {
+             console.log("🚀 伺服器啟動：目前沒有任何使用者，等待新使用者註冊以初始化狀態。");
         }
     });
 }
@@ -121,11 +157,15 @@ function preloadAllUsersState() {
 // 💡 使用者狀態初始化輔助函數
 // ==========================================
 const initializeUserState = (uid, callback) => {
+    // 如果該使用者的狀態已經在記憶體中，直接返回。
     if (currentFarmStates[uid]) {
         return callback && callback(null, currentFarmStates[uid]);
     }
+    // 從 HISTORY 表中查詢該使用者最近一筆環境數據，用於初始化記憶體狀態。
+    // 將欄位名稱進行轉換，使其與 `currentFarmStates` 的結構一致。
     db.get(`SELECT history_temp as temperature, history_soil_moisture as humidity, history_co2 as co2, history_light as light FROM HISTORY WHERE user_id = ? ORDER BY record_time DESC LIMIT 1`, [uid], (err, row) => {
         if (err) return callback && callback(err);
+        // 如果找到歷史數據，則用其初始化 `currentFarmStates`。
         if (row) {
             currentFarmStates[uid] = {
                 temperature: Number(row.temperature),
@@ -363,7 +403,7 @@ app.post('/api/simulator/update', (req, res) => {
     res.json({ success: true, currentState: currentFarmStates[uidStr] });
 });
 
-// 💡 3. 報表分頁查詢歷史數據 (🔥 終極相容防爆版)
+// 💡 3. 報表分頁查詢歷史數據
 app.get('/api/reports/history', (req, res) => {
     let { startDate, endDate, date } = req.query;
     const userId = parseUserId(req.query.userId);
@@ -409,13 +449,22 @@ app.get('/api/reports/history', (req, res) => {
 });
 
 // === 以下維持不變 ===
+// ==========================================
+// 4. 使用者註冊 API (POST /api/register)
+// ==========================================
 app.post('/api/register', (req, res) => {
+    // 從請求主體提取註冊資訊
     const { nickname, username, password, confirmPassword } = req.body;
+    // 驗證欄位是否齊全
     if (!nickname || !username || !password || !confirmPassword) return res.status(400).json({ success: false, message: "請填寫所有欄位" });
+    // 驗證兩次密碼是否一致
     if (password !== confirmPassword) return res.status(400).json({ success: false, message: "兩次輸入的密碼不一致" });
+    
+    // 將新使用者資料插入資料庫
     const sql = `INSERT INTO USER (nickname, account, password) VALUES (?, ?, ?)`;
     db.run(sql, [nickname, username, password], function(err) {
         if (err) {
+            // 處理帳號重複的錯誤 (UNIQUE constraint 違反)
             if (err.message.includes('UNIQUE constraint failed: USER.account')) return res.status(409).json({ success: false, message: "這個帳號已經有人使用了，請換一個！" });
             return res.status(500).json({ success: false, message: "伺服器發生未知的錯誤" });
         }
@@ -425,14 +474,19 @@ app.post('/api/register', (req, res) => {
             currentFarmStates[newId] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
             console.log(`🆕 註冊後已為使用者 ${newId} 建立初始暫存`);
         }
+        // 回傳成功狀態與新使用者的基本資料
         res.json({ success: true, message: "註冊成功！", user: { id: this.lastID, nickname: nickname, account: username } });
     });
 });
 
+// ==========================================
+// 5. 使用者登入 API (POST /api/login)
+// ==========================================
 app.post('/api/login', (req, res) => {
     const { username, password } = req.body;
     const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
     console.log(`[${timeStr}] 🔐 /api/login request received for username=${username}`);
+    // 檢查是否有輸入帳密
     if (!username || !password) return res.status(400).json({ success: false, message: "請輸入帳號與密碼" });
 
     // 先檢查帳號是否存在，再確認密碼（debug 日誌已縮減）
@@ -445,8 +499,10 @@ app.post('/api/login', (req, res) => {
                     db.get(`SELECT rowid as id, nickname, account, password, avatar FROM USER WHERE rowid = ? OR id = ?`, [username, username], (err2, row2) => {
                         if (err2) return res.status(500).json({ success: false, message: "資料庫查詢發生錯誤" });
                         if (!row2) return res.status(404).json({ success: false, message: "帳號不存在" });
+                        // 檢查密碼是否正確
                         if (row2.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
                         const uidStr2 = String(row2.id);
+                        // 登入成功後，為使用者初始化狀態
                         initializeUserState(uidStr2, (initErr) => {
                             if (initErr) console.error(`[/api/login] 初始化使用者 ${uidStr2} 狀態時錯誤:`, initErr.message);
                             return res.json({ success: true, message: "登入成功！", user: row2 });
@@ -457,9 +513,12 @@ app.post('/api/login', (req, res) => {
                 }
             };
 
+            // 如果一般帳號查詢不到，進入把帳號當 userId 的後備查詢
             if (!row) return handleNotFound();
+            // 檢查密碼是否正確
             if (row.password !== password) return res.status(401).json({ success: false, message: "帳號或密碼錯誤" });
             const uidStr = String(row.id);
+            // 登入成功後，為使用者初始化環境狀態暫存
             initializeUserState(uidStr, (initErr) => {
                 if (initErr) console.error(`[/api/login] 初始化使用者 ${uidStr} 狀態時錯誤:`, initErr.message);
                 return res.json({ success: true, message: "登入成功！", user: row });
@@ -467,26 +526,38 @@ app.post('/api/login', (req, res) => {
         });
 });
 
+// ==========================================
+// 6. 設定警示範圍 API (POST /api/alerts/settings)
+// ==========================================
 app.post('/api/alerts/settings', (req, res) => {
     const { userId, tempRange, humidRange, co2Range, lightRange } = req.body;
     const parsedUserId = parseUserId(userId);
     if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的使用者 ID" });
+    
+    // 將陣列範圍轉為 JSON 字串存入資料庫
     const tempStr = JSON.stringify(tempRange);
     const soilStr = JSON.stringify(humidRange);
     const co2Str = JSON.stringify(co2Range);
     const lightStr = JSON.stringify(lightRange);
+    
+    // 檢查使用者是否已經有設定紀錄
     const checkSql = `SELECT * FROM WARNING_RANGE WHERE user_id = ?`;
     db.get(checkSql, [parsedUserId], (err, row) => {
         if (row) {
+            // 若已有紀錄，執行更新操作 (UPDATE)
             const updateSql = `UPDATE WARNING_RANGE SET temp_warning = ?, soil_warning = ?, co2_warning = ?, light_warning = ? WHERE user_id = ?`;
             db.run(updateSql, [tempStr, soilStr, co2Str, lightStr, userId], () => res.json({ success: true, message: "設定更新成功！" }));
         } else {
+            // 若無紀錄，執行插入操作 (INSERT)
             const insertSql = `INSERT INTO WARNING_RANGE (user_id, temp_warning, soil_warning, co2_warning, light_warning) VALUES (?, ?, ?, ?, ?)`;
             db.run(insertSql, [userId, tempStr, soilStr, co2Str, lightStr], () => res.json({ success: true, message: "設定新增成功！" }));
         }
     });
 });
 
+// ==========================================
+// 7. 取得警示範圍設定 API (GET /api/alerts/settings)
+// ==========================================
 app.get('/api/alerts/settings', (req, res) => {
     const userId = parseUserId(req.query.userId);
     if (userId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
@@ -503,44 +574,57 @@ app.get('/api/alerts/settings', (req, res) => {
             }
         };
 
+        // 將資料庫的字串格式轉回前端需要的陣列格式回傳
         res.json({
             success: true,
             settings: {
                 tempRange: safeParse(row.temp_warning),
                 humidRange: safeParse(row.soil_warning),
                 co2Range: safeParse(row.co2_warning),
+                // 光照預設範圍
                 lightRange: safeParse(row.light_warning) || [500, 50000]
             }
         });
     });
 });
 
+// ==========================================
+// 8. 新增警示紀錄 API (POST /api/alerts/logs)
+// ==========================================
 app.post('/api/alerts/logs', (req, res) => {
     const { userId, message } = req.body;
     const parsedUserId = parseUserId(userId);
     if (parsedUserId === null || !message) return res.status(400).json({ success: false, message: "缺少必要參數或 userId 格式錯誤" });
+    // 將新產生的警示紀錄寫入 ALERT_LOGS 表
     db.run(`INSERT INTO ALERT_LOGS (user_id, message, record_time) VALUES (?, ?, datetime('now', '+8 hours'))`, [parsedUserId, message], function(err) {
         if (err) return res.status(500).json({ success: false, message: "新增紀錄失敗" });
         res.json({ success: true, message: "新增紀錄成功", id: this.lastID });
     });
 });
 
+// ==========================================
+// 9. 手動灌溉 API (POST /api/irrigation/manual)
+// ==========================================
 app.post('/api/irrigation/manual', (req, res) => {
     const { userId, targetHumidity } = req.body;
     const parsedUserId = parseUserId(userId);
     if (parsedUserId === null || targetHumidity === undefined) return res.status(400).json({ success: false, message: "缺少必要參數或 userId 格式錯誤" });
     const uid = String(parsedUserId);
     const target = Number(targetHumidity);
+    // 驗證目標濕度範圍
     if (isNaN(target) || target < 0 || target > 100) return res.status(400).json({ success: false, message: "目標濕度需介於 0~100" });
 
+    // 確保使用者的記憶體狀態存在
     if (!currentFarmStates[uid]) {
         currentFarmStates[uid] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
     }
 
+    // 計算新的濕度值 (取目標濕度與目前濕度的較大值，代表只會澆水增加濕度)
     const currentHumidity = Number(currentFarmStates[uid].humidity || 0);
     const newHumidity = target > currentHumidity ? target : currentHumidity;
     currentFarmStates[uid].humidity = newHumidity;
 
+    // 寫入手動灌溉紀錄到 IRRIGATION_LOGS 表
     db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
         [uid, 'manual', target, newHumidity, `manual target ${target}`], function(err) {
             if (err) return res.status(500).json({ success: false, message: "儲存灌溉紀錄失敗" });
@@ -554,11 +638,16 @@ app.post('/api/irrigation/manual', (req, res) => {
     );
 });
 
+// ==========================================
+// 10. 自動灌溉手動觸發 API (POST /api/irrigation/auto)
+// ==========================================
 app.post('/api/irrigation/auto', (req, res) => {
     const { userId, targetHumidity } = req.body;
     const parsedUserId = parseUserId(userId);
     if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的使用者 ID" });
     const uid = String(parsedUserId);
+    
+    // 確保使用者的記憶體狀態存在
     if (!currentFarmStates[uid]) {
         currentFarmStates[uid] = { temperature: 25, humidity: 25, co2: 800, light: 100000 };
     }
@@ -567,10 +656,13 @@ app.post('/api/irrigation/auto', (req, res) => {
     const target = targetHumidity !== undefined ? Number(targetHumidity) : currentHumidity;
     if (isNaN(target) || target < 0 || target > 100) return res.status(400).json({ success: false, message: "目標濕度需介於 0~100" });
 
+    // 更新濕度
     const newHumidity = target > currentHumidity ? target : currentHumidity;
     currentFarmStates[uid].humidity = newHumidity;
+    // 記錄最後自動灌溉時間，防止背景排程在短時間內重複觸發
     lastAutoIrrigationTimes[uid] = Date.now();
 
+    // 寫入自動灌溉紀錄到 IRRIGATION_LOGS 表
     db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
         [uid, 'auto', target, newHumidity, `manual trigger or schedule`], function(err) {
             if (err) return res.status(500).json({ success: false, message: "儲存自動灌溉紀錄失敗" });
@@ -584,6 +676,9 @@ app.post('/api/irrigation/auto', (req, res) => {
     );
 });
 
+// ==========================================
+// 11. 取得灌溉統計次數報表 API (GET /api/reports/irrigation-count)
+// ==========================================
 app.get('/api/reports/irrigation-count', (req, res) => {
     const userId = parseUserId(req.query.userId);
     const startDate = req.query.startDate;
@@ -592,6 +687,8 @@ app.get('/api/reports/irrigation-count', (req, res) => {
 
     const fromDate = startDate;
     const toDate = endDate || startDate;
+    
+    // 統計各個日期的總灌溉次數、手動灌溉次數、自動灌溉次數
     const sql = `
         SELECT substr(record_time, 1, 10) as date,
                COUNT(*) as count,
@@ -605,6 +702,7 @@ app.get('/api/reports/irrigation-count', (req, res) => {
 
     db.all(sql, [userId, fromDate, toDate], (err, rows) => {
         if (err) return res.status(500).json({ success: false, message: '查詢灌溉統計失敗' });
+        // 將查詢結果整理成前端 Chart.js 容易使用的陣列格式
         const labels = rows.map(row => row.date);
         const counts = rows.map(row => Number(row.count));
         const totalCount = counts.reduce((sum, cur) => sum + cur, 0);
@@ -614,29 +712,42 @@ app.get('/api/reports/irrigation-count', (req, res) => {
     });
 });
 
+// ==========================================
+// 12. 取得警示歷史紀錄 API (GET /api/alerts/logs)
+// ==========================================
 app.get('/api/alerts/logs', (req, res) => {
     const userId = parseUserId(req.query.userId);
     if (userId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
+    // 查詢最新的 20 筆警示紀錄，並將日期與時間拆分
     db.all(`SELECT log_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
         if (err) return res.status(500).json({ success: false, message: "查詢紀錄失敗" });
         res.json({ success: true, logs: rows || [] });
     });
 });
 
+// ==========================================
+// 13. 設定自動灌溉排程 API (POST /api/schedule)
+// ==========================================
 app.post('/api/schedule', (req, res) => {
     const { userId, frequency, duration } = req.body;
     const parsedUserId = parseUserId(userId);
     if (parsedUserId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
+    // 檢查是否已有設定
     db.get(`SELECT * FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [parsedUserId], (err, row) => {
         if (row) {
+            // 更新既有排程
             db.run(`UPDATE SCHEDULE_SETTINGS SET frequency = ?, duration = ?, updated_at = datetime('now', '+8 hours') WHERE user_id = ?`, [frequency, duration, parsedUserId], () => res.json({ success: true }));
         } else {
+            // 插入新排程
             db.run(`INSERT INTO SCHEDULE_SETTINGS (user_id, frequency, duration, updated_at) VALUES (?, ?, ?, datetime('now', '+8 hours'))`, [parsedUserId, frequency, duration], () => res.json({ success: true }));
         }
     });
 });
 
 // 💡 新增：處理清空特定使用者警示紀錄的 DELETE API
+// ==========================================
+// 14. 清空警示紀錄 API (DELETE /api/alerts/logs)
+// ==========================================
 app.delete('/api/alerts/logs', (req, res) => {
     const userId = parseUserId(req.query.userId);
     const timeStr = new Date().toLocaleString('zh-TW', { hour12: false });
@@ -667,7 +778,9 @@ app.delete('/api/alerts/logs', (req, res) => {
     });
 });
 
-// 取得使用者的排程設定
+// ==========================================
+// 15. 取得使用者排程設定 API (GET /api/schedule)
+// ==========================================
 app.get('/api/schedule', (req, res) => {
     const userId = parseUserId(req.query.userId);
     if (userId === null) return res.status(400).json({ success: false, message: '缺少或無效的 userId' });
@@ -678,6 +791,9 @@ app.get('/api/schedule', (req, res) => {
     });
 });
 
+// ==========================================
+// 16. 取得使用者基本資訊 API (GET /api/users/:id)
+// ==========================================
 app.get('/api/users/:id', (req, res) => {
     db.get(`SELECT rowid as id, nickname, account, avatar FROM USER WHERE rowid = ?`, [req.params.id], (err, row) => {
         if (row) res.json({ success: true, user: row });
@@ -685,16 +801,29 @@ app.get('/api/users/:id', (req, res) => {
     });
 });
 
+// ==========================================
+// 17. 更新使用者暱稱 API (PUT /api/users/:id)
+// ==========================================
 app.put('/api/users/:id', (req, res) => {
     db.run(`UPDATE USER SET nickname = ? WHERE rowid = ?`, [req.body.nickname, req.params.id], () => res.json({ success: true }));
 });
 
+// ==========================================
+// 18. 更新使用者頭像 API (PUT /api/users/:id/avatar)
+// ==========================================
 app.put('/api/users/:id/avatar', (req, res) => {
     db.run(`UPDATE USER SET avatar = ? WHERE rowid = ?`, [req.body.avatar, req.params.id], () => res.json({ success: true }));
 });
 
+// ==========================================
+// 掛載其他路由器
+// ==========================================
+// 將 crops.js 檔案中定義的所有路由掛載在 /api/crops 之下
 app.use('/api/crops', require('./routes/crops'));
 
+// ==========================================
+// 啟動伺服器
+// ==========================================
 app.listen(port, () => {
     console.log(`🚀 後端多使用者架構伺服器已啟動：http://localhost:${port}`);
 });
