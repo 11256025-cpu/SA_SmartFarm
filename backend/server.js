@@ -1,3 +1,6 @@
+/*
+ * backend/server.js - Express 伺服器入口，包含 SQLite 連線、資料表初始化、背景寫入與 API 路由設定。
+ */
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');

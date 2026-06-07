@@ -1,3 +1,6 @@
+/*
+ * frontend/hooks/use-color-scheme.web.ts - Web 平台的色彩模式 Hook。
+ */
 import { useEffect, useState } from 'react';
 import { useColorScheme as useRNColorScheme } from 'react-native';
 

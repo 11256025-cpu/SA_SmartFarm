@@ -1,3 +1,6 @@
+/*
+ * frontend/app/modal.tsx - 共用對話視窗頁面組件。
+ */
 
 import { Link } from 'expo-router';
 import { StyleSheet } from 'react-native';

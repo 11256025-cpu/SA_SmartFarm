@@ -1,3 +1,6 @@
+/*
+ * frontend/app/reports.tsx - 報告頁面，顯示歷史數據與分析。
+ */
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useMemo, useState } from 'react';

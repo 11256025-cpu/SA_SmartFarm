@@ -1,3 +1,6 @@
+/*
+ * frontend/app/crops.tsx - 作物頁面，顯示作物相關資料與操作。
+ */
 import { FontAwesome } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';

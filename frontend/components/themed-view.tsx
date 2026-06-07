@@ -1,3 +1,6 @@
+/*
+ * frontend/components/themed-view.tsx - 依主題色彩切換的容器元件。
+ */
 import { View, type ViewProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';

@@ -1,3 +1,6 @@
+/*
+ * frontend/app/_layout.tsx - Expo Router 根佈局，定義全域頁面外框與共用樣式。
+ */
 
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';

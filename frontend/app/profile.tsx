@@ -1,3 +1,6 @@
+/*
+ * frontend/app/profile.tsx - 使用者個人資料頁面。
+ */
 import { FontAwesome, Ionicons } from '@expo/vector-icons'; // 新增 icon 函式庫以顯示大頭貼
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';

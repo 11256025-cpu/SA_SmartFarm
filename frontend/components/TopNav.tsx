@@ -1,3 +1,6 @@
+/*
+ * frontend/components/TopNav.tsx - 頂部導覽列，顯示標題、按鈕與通知圖示。
+ */
 import { FontAwesome } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React from 'react';

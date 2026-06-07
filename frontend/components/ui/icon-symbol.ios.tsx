@@ -1,3 +1,6 @@
+/*
+ * frontend/components/ui/icon-symbol.ios.tsx - iOS 專用圖示元件實作。
+ */
 import { SymbolView, SymbolViewProps, SymbolWeight } from 'expo-symbols';
 import { StyleProp, ViewStyle } from 'react-native';
 

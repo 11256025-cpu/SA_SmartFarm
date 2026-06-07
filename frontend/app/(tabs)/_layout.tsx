@@ -1,3 +1,6 @@
+/*
+ * frontend/app/(tabs)/_layout.tsx - 底部分頁式導航佈局。
+ */
 import { Tabs } from 'expo-router';
 import React from 'react';
 

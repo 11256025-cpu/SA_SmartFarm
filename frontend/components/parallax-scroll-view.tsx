@@ -1,3 +1,6 @@
+/*
+ * frontend/components/parallax-scroll-view.tsx - 支援視差滾動效果的捲動元件。
+ */
 import type { PropsWithChildren, ReactElement } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {

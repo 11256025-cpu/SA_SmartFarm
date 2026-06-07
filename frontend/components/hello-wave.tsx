@@ -1,3 +1,6 @@
+/*
+ * frontend/components/hello-wave.tsx - 以動畫呈現歡迎動畫元件。
+ */
 import Animated from 'react-native-reanimated';
 
 export function HelloWave() {

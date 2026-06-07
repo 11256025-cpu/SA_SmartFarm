@@ -1,3 +1,6 @@
+/*
+ * frontend/components/ui/collapsible.tsx - 展開/摺疊區塊元件。
+ */
 import { PropsWithChildren, useState } from 'react';
 import { StyleSheet, TouchableOpacity } from 'react-native';
 

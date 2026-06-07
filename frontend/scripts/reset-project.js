@@ -1,3 +1,6 @@
+/*
+ * frontend/scripts/reset-project.js - 重設 Expo 專案快取與相關設定。
+ */
 #!/usr/bin/env node
 
 /**

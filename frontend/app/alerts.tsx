@@ -1,3 +1,6 @@
+/*
+ * frontend/app/alerts.tsx - 警示頁面，顯示和設定警報條件。
+ */
 import { FontAwesome } from '@expo/vector-icons';
 import MultiSlider from '@ptomasroos/react-native-multi-slider';
 import AsyncStorage from '@react-native-async-storage/async-storage';

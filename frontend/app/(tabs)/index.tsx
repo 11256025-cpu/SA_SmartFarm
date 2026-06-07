@@ -1,3 +1,6 @@
+/*
+ * frontend/app/(tabs)/index.tsx - 首頁分頁內容，通常顯示儀表板或摘要。
+ */
 import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import PageShell from '../../components/PageShell';

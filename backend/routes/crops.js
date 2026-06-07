@@ -1,3 +1,6 @@
+/*
+ * backend/routes/crops.js - 作物相關 API 路由與資料庫查詢邏輯。
+ */
 const express = require('express');
 const router = express.Router();
 const sqlite3 = require('sqlite3').verbose();

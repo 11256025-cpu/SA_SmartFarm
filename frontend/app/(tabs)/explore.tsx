@@ -1,3 +1,6 @@
+/*
+ * frontend/app/(tabs)/explore.tsx - 探索頁面，可能顯示地圖、搜尋或推薦內容。
+ */
 import { ExternalLink } from '@/components/external-link';
 import ParallaxScrollView from '@/components/parallax-scroll-view';
 import { ThemedText } from '@/components/themed-text';

@@ -1,3 +1,6 @@
+/*
+ * backend/setup.js - 設定或初始化後端資料庫。
+ */
 const sqlite3 = require('sqlite3').verbose();
 
 // 連線並建立 SQLite 資料庫

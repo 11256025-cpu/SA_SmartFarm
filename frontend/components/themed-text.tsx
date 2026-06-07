@@ -1,3 +1,6 @@
+/*
+ * frontend/components/themed-text.tsx - 依主題色彩切換的文字元件。
+ */
 import { StyleSheet, Text, type TextProps } from 'react-native';
 
 import { useThemeColor } from '@/hooks/use-theme-color';

@@ -1,3 +1,6 @@
+/*
+ * frontend/components/sharedStyles.ts - 共用樣式與佈局變數。
+ */
 import { StyleSheet } from 'react-native';
 
 export const colors = {

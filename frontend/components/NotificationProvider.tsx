@@ -1,3 +1,6 @@
+/*
+ * frontend/components/NotificationProvider.tsx - 全域通知狀態管理與通知面板。
+ */
 import React, { createContext, useCallback, useContext, useState } from 'react';
 
 export type NotificationType = 'alert' | 'success' | 'warning' | 'info' | 'error';

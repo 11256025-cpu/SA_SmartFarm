@@ -1,3 +1,6 @@
+/*
+ * frontend/components/haptic-tab.tsx - 支援觸覺回饋的分頁按鈕元件。
+ */
 import { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { PlatformPressable } from '@react-navigation/elements';
 import * as Haptics from 'expo-haptics';

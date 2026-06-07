@@ -1,3 +1,6 @@
+/*
+ * frontend/components/PageShell.tsx - 應用程式主頁框架，包含導覽列與通知邏輯。
+ */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { router } from 'expo-router';
