@@ -276,37 +276,57 @@ setInterval(() => {
 
             // 自動灌溉排程：當土壤濕度低於設定下限時，按照使用者排程觸發一次灌溉
             db.get(`SELECT * FROM SCHEDULE_SETTINGS WHERE user_id = ?`, [uid], (err2, scheduleRow) => {
+                // 若沒有排程設定，則直接跳出不執行自動灌溉
                 if (err2 || !scheduleRow) return;
 
+                // 取得使用者設定的「灌溉頻率 (分鐘)」，若未設定則為 0
                 const intervalMinutes = Number(scheduleRow.frequency) || 0;
+                // 若頻率小於等於 0，代表使用者可能關閉了自動灌溉功能
                 if (intervalMinutes <= 0) return;
 
+                // 準備解析土壤濕度的安全範圍 [下限, 上限]
                 let range;
                 try {
+                    // 嘗試解析 JSON 格式 (例如 "[30, 80]")
                     range = JSON.parse(row.soil_warning);
                 } catch (e) {
+                    // 為了相容舊資料庫，如果解析失敗，則嘗試用逗號分割字串
                     range = row.soil_warning ? row.soil_warning.split(',').map(Number) : null;
                 }
+                
+                // 防呆：確保範圍陣列存在且有包含下限與上限兩個數值
                 if (!Array.isArray(range) || range.length < 2) return;
 
                 const lower = Number(range[0]);
                 const upper = Number(range[1]);
                 if (isNaN(lower) || isNaN(upper)) return;
 
+                // === 判斷冷卻時間 (頻率) ===
                 const now = Date.now();
+                // 取得上一次自動灌溉的時間戳，若沒有紀錄則視為 0 (一定會觸發)
                 const lastRun = lastAutoIrrigationTimes[uid] || 0;
+                // due (到期)：計算距離上次灌溉是否已經超過了設定的頻率 (將分鐘轉為毫秒)
                 const due = now - lastRun >= intervalMinutes * 60000;
 
                 // 詳細排程檢查日誌，幫助診斷為何未觸發灌溉
                 const checkTime = new Date().toLocaleString('zh-TW', { hour12: false });
                 console.log(`[${checkTime}] [排程檢查] 使用者 ${uid} | humidity=${state.humidity} | lower=${lower} | upper=${upper} | frequency=${intervalMinutes} | lastRun=${lastRun} | due=${due}`);
 
+                // === 觸發自動灌溉的核心條件 ===
+                // 1. 目前土壤濕度 < 安全範圍下限
+                // 2. 距離上次灌溉已達到設定的頻率時間
                 if (state.humidity < lower && due) {
+                    // 計算目標濕度 (最高不會超過 100%，以安全上限為基準)
                     const targetHumidity = Math.min(100, upper);
+                    // 確保灌溉後的濕度只增不減
                     const newHumidity = Math.max(state.humidity, targetHumidity);
+                    
+                    // 更新記憶體中的模擬器暫存狀態，讓前端馬上能拉到新數據
                     currentFarmStates[uid].humidity = newHumidity;
+                    // 更新最後一次自動灌溉的時間，重新計算冷卻
                     lastAutoIrrigationTimes[uid] = now;
 
+                    // 將本次自動灌溉紀錄實體寫入資料庫
                     db.run(`INSERT INTO IRRIGATION_LOGS (user_id, irrigation_type, target_humidity, new_humidity, condition, record_time) VALUES (?, ?, ?, ?, ?, datetime('now', '+8 hours'))`,
                         [uid, 'auto', targetHumidity, newHumidity, `humidity<${lower}`],
                         (err3) => {
@@ -319,6 +339,7 @@ setInterval(() => {
                                     const todayCount = countErr ? 'unknown' : countRow.total;
                                     const freq = intervalMinutes || (scheduleRow && scheduleRow.frequency) || 'n/a';
                                     const dur = (scheduleRow && scheduleRow.duration) || 'n/a';
+                                    // 預估並計算下一次可能的執行時間
                                     const nextRun = new Date(Date.now() + (Number(freq) * 60000));
                                     const nextRunStr = isNaN(nextRun.getTime()) ? 'n/a' : nextRun.toLocaleString('zh-TW', { hour12: false });
                                     console.log(`[${timeStr}] 💧 [自動灌溉] 使用者 ${uid} 已執行灌溉 (頻率: ${freq} 分鐘, 時長: ${dur} 分鐘) 目標濕度: ${targetHumidity}%, 新濕度: ${newHumidity}%, 今日灌溉次數: ${todayCount}, 下一次預計: ${nextRunStr}`);
@@ -448,7 +469,7 @@ app.get('/api/reports/history', (req, res) => {
     });
 });
 
-// === 以下維持不變 ===
+
 // ==========================================
 // 4. 使用者註冊 API (POST /api/register)
 // ==========================================
