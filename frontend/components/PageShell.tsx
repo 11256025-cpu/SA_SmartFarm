@@ -275,22 +275,6 @@ const styles = StyleSheet.create({
   centerPanel: { width: 260, alignItems: 'center' },
   rightPanel: { flex: 6.2 },
   full: { width: '100%' },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: spacing.lg,
-  },
-  notificationBox: {
-    width: '100%',
-    maxWidth: 520,
-    backgroundColor: colors.leftPanel,
-    borderRadius: radii.lg,
-    padding: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
   notificationHeader: {
     color: colors.text,
     fontSize: 20,
@@ -352,9 +336,6 @@ const styles = StyleSheet.create({
   },
   notificationPrimary: {
     backgroundColor: colors.primary,
-  },
-  notificationSecondary: {
-    backgroundColor: colors.muted,
   },
   notificationButtonText: {
     color: '#FFF',

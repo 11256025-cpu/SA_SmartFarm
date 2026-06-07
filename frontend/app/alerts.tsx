@@ -283,12 +283,12 @@ export default function AlertsScreen() {
           </View>
           {/* 💡 效能優化：FlatList 虛擬列表 */}
           {/* 相較於 ScrollView + map，FlatList 只會渲染畫面可見範圍內的項目，能大幅提升長列表的渲染效能 */}
+          {/* 若無紀錄時顯示的空狀態提示 */}
           <FlatList
             data={alertLogs}
             keyExtractor={(item) => String(item.id)}
             style={styles.logsScrollArea}
             showsVerticalScrollIndicator={true}
-            {/* 若無紀錄時顯示的空狀態提示 */}
             ListEmptyComponent={<Text style={styles.emptyText}>暫無警示紀錄。</Text>}
             renderItem={({ item: log }) => (
               <View style={styles.logItem}>
@@ -328,12 +328,6 @@ export default function AlertsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
-  scrollContent: { flexGrow: 1, alignItems: 'center' },
-  mainLayout: { flex: 1, flexDirection: 'row', padding: spacing.xl, gap: 25 },
-  contentRow: { flexDirection: 'row', gap: 30, width: '100%' },
-  logSection: { width: '38%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
-  settingSection: { width: '62%', backgroundColor: colors.leftPanel, borderRadius: radii.lg, padding: spacing.xl },
   sectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   sectionTitle: { color: colors.text, fontSize: 20, fontWeight: 'bold' },
   logItem: { 

@@ -703,20 +703,8 @@ export default function EnvironmentScreen() {
 }
 
 const styles = StyleSheet.create({
-  scrollContent: { flexGrow: 1, alignItems: 'center' },
-  mainLayout: { flexDirection: 'row', width: '100%', maxWidth: 1200, padding: spacing.xxl },
   leftColumn: { flex: 1 },
   rightColumn: { flex: 1, backgroundColor: colors.control, borderRadius: radii.lg, padding: spacing.xl, borderWidth: 1, borderColor: colors.border, maxHeight: 600 },
-  topNav: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: spacing.xl, paddingHorizontal: spacing.md, width: '100%' },
-  navLeftGroup: { flexDirection: 'row', gap: 25, alignItems: 'center', justifyContent: 'center' },
-  navRightGroup: { position: 'absolute', right: 10 },
-  navItem: { paddingBottom: 8, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  navItemActive: { borderBottomColor: colors.primary },
-  navText: { color: colors.muted, fontSize: 16 },
-  navTextActive: { color: colors.text, fontSize: 16, fontWeight: 'bold' },
-  warningWrapper: { alignItems: 'flex-end', marginBottom: spacing.lg },
-  warningToast: { backgroundColor: colors.alert, flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 20 },
-  warningText: { color: '#000', fontWeight: 'bold', fontSize: 14 },
   gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   card: { width: '48%', backgroundColor: colors.card, borderRadius: radii.lg, padding: spacing.lg, marginBottom: spacing.lg, minHeight: 160, justifyContent: 'space-between' },
   cardTitle: { color: colors.text, fontSize: typography.h2, fontWeight: 'bold' },
@@ -750,7 +738,6 @@ const styles = StyleSheet.create({
   controlLabel: { color: colors.text, fontSize: 14 },
   controlValueText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
   slider: { width: '100%', height: 40 },
-  centerColumn: { width: 260, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 },
 
   // 💡 追加新增的 Modal 樣式，沿用與登入頁完全一致的設計
   modalOverlay: {
