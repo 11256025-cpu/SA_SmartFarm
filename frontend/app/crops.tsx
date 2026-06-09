@@ -401,8 +401,8 @@ export default function CropsScreen() {
       <ScrollView contentContainerStyle={styles.cardGridContainer} showsVerticalScrollIndicator={false}>
         {crops.map((item) => (
           <View key={item.id} style={styles.cropCard}>
-            {/* 卡片上半部 (照片與基本資料)：點擊可開啟編輯模式 */}
-            <TouchableOpacity activeOpacity={0.8} onPress={() => handleEditCrop(item)}>
+            {/* 卡片上半部 (照片與基本資料)：改為不可點擊，使用右下角按鈕開啟編輯 */}
+            <View>
               <View style={styles.cardImageLayer}>
                 {item.image ? (
                   <Image source={{ uri: item.image }} style={styles.cardRealRenderImage} />
@@ -419,7 +419,7 @@ export default function CropsScreen() {
                 <Text style={styles.cardCropMetaText} numberOfLines={1}>作物階段：{item.stage}</Text>
                 <Text style={styles.cardCropMetaText} numberOfLines={1}>作物狀態：{item.status}</Text>
               </View>
-            </TouchableOpacity>
+            </View>
 
             {/* 卡片下半部：歷史紀錄區塊 */}
             <View style={styles.cardHistoryContainer}>
@@ -445,6 +445,10 @@ export default function CropsScreen() {
                 )}
               </ScrollView>
             </View>
+            {/* 右下角編輯浮動按鈕：提供明確的編輯入口（同時保留點擊整張卡片開啟編輯的行為） */}
+            <TouchableOpacity style={styles.editBtn} onPress={() => handleEditCrop(item)} accessibilityLabel="編輯作物">
+              <FontAwesome name="pencil" size={14} color={colors.text} />
+            </TouchableOpacity>
           </View>
         ))}
 
@@ -622,4 +626,6 @@ const styles = StyleSheet.create({
   historyText: { color: colors.subMuted, fontSize: 14, marginBottom: 6, lineHeight: 20 },
   dashedActionCard: { width: '48%', minWidth: 280, minHeight: 475, borderRadius: radii.lg, borderWidth: 2, borderColor: colors.border, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center', backgroundColor: 'transparent' },
   dashedActionText: { color: colors.muted, fontSize: 18, fontWeight: 'bold' }
+  ,
+  editBtn: { position: 'absolute', bottom: 12, right: 12, backgroundColor: colors.primary, padding: 8, borderRadius: 20, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 6, elevation: 6 }
 });
