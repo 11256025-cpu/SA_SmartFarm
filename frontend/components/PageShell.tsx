@@ -146,7 +146,6 @@ export default function PageShell({ left, center, right, children, active, showN
       const alertNotifications = alerts.map((type) => {
         const info = getAlertContent(type);
         return {
-          id: `alert-${type}`,
           title: info.title,
           message: info.message,
           type: 'alert' as const,
@@ -165,7 +164,7 @@ export default function PageShell({ left, center, right, children, active, showN
 
   // 利用 Ref 記錄上一秒的通知數量與 Timer ID (不會觸發畫面重新渲染)
   const prevNotificationCountRef = React.useRef(notifications.length);
-  const autoCloseTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+  const autoCloseTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 自動關閉通知面板的邏輯
   useEffect(() => {

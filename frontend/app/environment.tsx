@@ -449,7 +449,6 @@ export default function EnvironmentScreen() {
     newAlerts.forEach((type) => {
       const content = getEnvironmentAlertContent(type);
       addNotification({
-        id: `alert-${type}`,
         title: content.title,
         message: content.message,
         type: 'alert',

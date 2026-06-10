@@ -425,9 +425,9 @@ export default function CropsScreen() {
             <View style={styles.cardHistoryContainer}>
               <View style={styles.historyHeader}>
                 <Text style={styles.historyTitle}>
-                  狀態變更紀錄 {item.history?.length > 0 ? `(${item.history.length})` : ''}
+                  狀態變更紀錄 {(item.history?.length ?? 0) > 0 ? `(${item.history?.length ?? 0})` : ''}
                 </Text>
-                {item.history?.length > 2 && (
+                {(item.history?.length ?? 0) > 2 && (
                   <FontAwesome name="angle-double-down" size={16} color={colors.subMuted} style={{ opacity: 0.6 }} />
                 )}
               </View>

@@ -24,7 +24,7 @@ interface AlertLog {
 
 export default function AlertsScreen() {
   // 取得全域推播通知函式
-  const { addNotification } = useNotifications();
+  const { addNotification, replaceNotificationsOfType } = useNotifications();
   
   // === 狀態管理區域 ===
   // 1. 警示閾值狀態：儲存各環境指標的 [下限, 上限] 安全範圍
@@ -34,6 +34,63 @@ export default function AlertsScreen() {
   const [lightRange, setLightRange] = useState([500, 50000]);
   // 頁面載入狀態，避免載入完成前畫面閃爍
   const [loading, setLoading] = useState(true);
+
+  const isOutOfRange = (value: number, range: number[]) => {
+    return Array.isArray(range) && range.length === 2 && (value < range[0] || value > range[1]);
+  };
+
+  const getAlertNotification = (type: 'temperature' | 'humidity' | 'co2' | 'light') => {
+    switch (type) {
+      case 'temperature':
+        return {
+          title: '溫度異常',
+          message: '目前偵測到溫度超出設定範圍，請盡速檢查系統。',
+          type: 'alert' as const,
+        };
+      case 'humidity':
+        return {
+          title: '土壤濕度異常',
+          message: '目前偵測到土壤濕度超出設定範圍，請盡速檢查系統。',
+          type: 'alert' as const,
+        };
+      case 'co2':
+        return {
+          title: 'CO₂ 濃度異常',
+          message: '目前偵測到 CO₂ 濃度超出設定範圍，請盡速檢查系統。',
+          type: 'alert' as const,
+        };
+      case 'light':
+        return {
+          title: '光照強度異常',
+          message: '目前偵測到光照強度超出設定範圍，請盡速檢查系統。',
+          type: 'alert' as const,
+        };
+    }
+  };
+
+  const checkCurrentAlerts = useCallback(async () => {
+    try {
+      const uid = await AsyncStorage.getItem('userId') || '1';
+      const resp = await fetch(`${BASE_URL}/api/simulator/state?userId=${uid}`);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (!data.success || !data.state) return;
+
+      const state = data.state;
+      const alertTypes: ('temperature' | 'humidity' | 'co2' | 'light')[] = [];
+      if (isOutOfRange(Number(state.temperature), tempRange)) alertTypes.push('temperature');
+      if (isOutOfRange(Number(state.humidity), humidRange)) alertTypes.push('humidity');
+      if (isOutOfRange(Number(state.co2), co2Range)) alertTypes.push('co2');
+      if (isOutOfRange(Number(state.light), lightRange)) alertTypes.push('light');
+
+      replaceNotificationsOfType(
+        'alert',
+        alertTypes.map((type) => getAlertNotification(type)!)
+      );
+    } catch (error) {
+      console.warn('檢查當前警示狀態失敗：', error);
+    }
+  }, [tempRange, humidRange, co2Range, lightRange, replaceNotificationsOfType]);
 
   // 2. 初始化：元件掛載時讀取後端儲存的使用者設定，並將其數值套用到畫面滑軌上
   useEffect(() => {
@@ -74,6 +131,12 @@ export default function AlertsScreen() {
     loadSettings();
   }, []);
 
+  useEffect(() => {
+    if (!loading) {
+      checkCurrentAlerts();
+    }
+  }, [loading]);
+
   // 3. 警示紀錄資料狀態 (預設為空陣列)
   const [alertLogs, setAlertLogs] = useState<AlertLog[]>([]);
 
@@ -103,7 +166,8 @@ export default function AlertsScreen() {
         }
       };
       loadAlertLogs();
-    }, [])
+      checkCurrentAlerts();
+    }, [checkCurrentAlerts])
   );
 
   // 處理清空所有警示紀錄的操作
