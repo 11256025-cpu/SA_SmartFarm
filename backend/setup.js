@@ -44,7 +44,7 @@ db.serialize(() => {
     // 記錄系統觸發的所有警示訊息，包含觸發警示的使用者ID、訊息內容和紀錄時間。
     // `record_time` 自動設定為當前時間（UTC+8）。
     db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
-        log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
         message TEXT,
         record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
@@ -67,7 +67,7 @@ db.serialize(() => {
     // 儲存智能農場環境感測器的歷史數據，如溫度、土壤濕度、光照和二氧化碳濃度。
     // `record_time` 自動設定為當前時間（UTC+8）。
     db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        history_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER,
         history_temp REAL,
         history_soil_moisture REAL,
@@ -90,7 +90,7 @@ db.serialize(() => {
     // 儲存使用者種植的作物資訊，包括名稱、生長階段、狀態、圖片以及作物的歷史狀態變更紀錄（以 JSON 字串形式儲存）。
     // 💡 新增了 history 欄位，用來儲存作物的「狀態變更紀錄 (JSON 字串)」
     db.run(`CREATE TABLE IF NOT EXISTS CROPS (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        crops_id INTEGER PRIMARY KEY AUTOINCREMENT,
         user_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         stage TEXT,
@@ -102,7 +102,7 @@ db.serialize(() => {
         // 如果 `history` 欄位已存在，此 ALTER TABLE 指令會因錯誤而跳過（並在控制台列印訊息）。
         db.run(`ALTER TABLE CROPS ADD COLUMN history TEXT`, (err) => {
             // 如果 err 存在，通常是因為欄位已經存在，可以直接忽略
-            console.log("✅ 所有資料表建立與優化完成 (已為舊表補上 history 欄位)！");
+            console.log("✅ 所有資料表建立完成！");
             db.close();
         });
     });

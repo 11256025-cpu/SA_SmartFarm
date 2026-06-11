@@ -50,8 +50,6 @@ const db = new sqlite3.Database('./farm.db', (err) => {
 function initializeDatabase() {
     db.serialize(() => {
         // 1. 建立歷史數據表
-        // 儲存智能農場環境感測器的歷史數據，如溫度、土壤濕度、光照和二氧化碳濃度。
-        // `record_time` 欄位用於記錄數據寫入時間。
         db.run(`CREATE TABLE IF NOT EXISTS HISTORY (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -59,12 +57,10 @@ function initializeDatabase() {
             history_soil_moisture REAL,
             history_light REAL,
             history_co2 REAL,
-            record_time DATETIME
+            record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
         )`);
 
         // 2. 建立警報設定範圍表
-        // 儲存使用者自定義的各項環境參數（溫度、濕度、二氧化碳、光照）的警示上下限。
-        // `user_id` 作為主鍵，保證每個使用者只有一組警示設定。
         db.run(`CREATE TABLE IF NOT EXISTS WARNING_RANGE (
             user_id INTEGER PRIMARY KEY,
             temp_warning TEXT,
@@ -73,19 +69,15 @@ function initializeDatabase() {
             light_warning TEXT
         )`);
 
-        // 3. 建立警報紀錄表 (解決你目前報錯的核心問題)
-        // 記錄系統觸發的所有警示訊息，包含觸發警示的使用者ID、訊息內容和紀錄時間。
-        // `record_time` 欄位用於記錄警示發生時間。
+        // 3. 建立警報紀錄表
         db.run(`CREATE TABLE IF NOT EXISTS ALERT_LOGS (
-            log_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            alert_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
             message TEXT,
-            record_time DATETIME
+            record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
         )`);
 
-        // 4. 建立灌溉紀錄表：手動/自動灌溉事件都會記錄
-        // 記錄每一次灌溉事件的詳細資訊，包括灌溉類型（手動/自動）、目標濕度、實際濕度變化、觸發條件和紀錄時間。
-        // `record_time` 欄位用於記錄灌溉發生時間。
+        // 4. 建立灌溉紀錄表
         db.run(`CREATE TABLE IF NOT EXISTS IRRIGATION_LOGS (
             irrigation_id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER,
@@ -93,23 +85,19 @@ function initializeDatabase() {
             target_humidity REAL,
             new_humidity REAL,
             condition TEXT,
-            record_time DATETIME
+            record_time DATETIME DEFAULT (datetime('now', '+8 hours'))
         )`);
 
-        // 5. 建立使用者表 (配合你的 /api/login 和 /api/register)
-        // 儲存使用者帳戶的基本資料，例如暱稱、帳號、密碼和頭像。
-        // `account` 欄位設定為 `UNIQUE`，確保帳號的唯一性。
+        // 5. 建立使用者表
         db.run(`CREATE TABLE IF NOT EXISTS USER (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nickname TEXT,
-            account TEXT UNIQUE,
-            password TEXT,
+            nickname TEXT NOT NULL,
+            account TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
             avatar TEXT
         )`);
 
-        // 5. 建立排程設定表
-        // 儲存使用者的自動灌溉排程設定，包含灌溉頻率和持續時間。
-        // `updated_at` 記錄最後更新時間。
+        // 6. 建立排程設定表
         db.run(`CREATE TABLE IF NOT EXISTS SCHEDULE_SETTINGS (
             user_id INTEGER PRIMARY KEY,
             frequency TEXT,
@@ -117,9 +105,7 @@ function initializeDatabase() {
             updated_at DATETIME DEFAULT (datetime('now', '+8 hours'))
         )`);
 
-        // 6. 建立作物資料表
-        // 儲存使用者種植的作物資訊，包括名稱、生長階段、狀態、圖片以及作物的歷史狀態變更紀錄（以 JSON 字串形式儲存）。
-        // `history` 欄位用於儲存 JSON 格式的歷史紀錄。
+        // 7. 建立作物資料表，並嘗試補上 history 欄位以相容舊資料
         db.run(`CREATE TABLE IF NOT EXISTS CROPS (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id INTEGER NOT NULL,
@@ -128,7 +114,14 @@ function initializeDatabase() {
             status TEXT,
             image TEXT,
             history TEXT
-        )`);
+        )`, () => {
+            db.run(`ALTER TABLE CROPS ADD COLUMN history TEXT`, (err) => {
+                // 若欄位已存在會產生錯誤，這裡可以安全忽略
+                if (err) {
+                    // 不輸出錯誤以避免啟動時噪音
+                }
+            });
+        });
 
         console.log("📋 資料庫資料表檢查與初始化完成！");
         // 資料表初始化完成後，預載所有使用者的狀態到記憶體中。
@@ -740,7 +733,7 @@ app.get('/api/alerts/logs', (req, res) => {
     const userId = parseUserId(req.query.userId);
     if (userId === null) return res.status(400).json({ success: false, message: "缺少或無效的 userId" });
     // 查詢最新的 20 筆警示紀錄，並將日期與時間拆分
-    db.all(`SELECT log_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
+    db.all(`SELECT alert_id as id, message as msg, substr(record_time, 1, 10) as date, substr(record_time, 12, 5) as time FROM ALERT_LOGS WHERE user_id = ? ORDER BY record_time DESC LIMIT 20`, [userId], (err, rows) => {
         if (err) return res.status(500).json({ success: false, message: "查詢紀錄失敗" });
         res.json({ success: true, logs: rows || [] });
     });
