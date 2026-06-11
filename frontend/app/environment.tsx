@@ -235,6 +235,7 @@ export default function EnvironmentScreen() {
     }
   };
 
+  // The handleAutoIrrigation function is no longer used after removing the button.
   // 處理自動灌溉判斷的函式
   const handleAutoIrrigation = async () => {
     try {
@@ -645,9 +646,6 @@ export default function EnvironmentScreen() {
               </View>
 
               <View style={styles.scheduleFooter}>
-                <TouchableOpacity style={[styles.saveButton, styles.smallButton, styles.scheduleFooterButton]} onPress={handleAutoIrrigation}>
-                  <Text style={styles.saveButtonText}>依條件執行灌溉</Text>
-                </TouchableOpacity>
                 <TouchableOpacity style={[styles.saveButton, styles.scheduleFooterButton]} onPress={handleSaveSchedule}>
                   <Text style={styles.saveButtonText}>儲存設定</Text>
                 </TouchableOpacity>
