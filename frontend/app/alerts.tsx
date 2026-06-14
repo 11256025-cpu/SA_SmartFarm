@@ -289,7 +289,7 @@ export default function AlertsScreen() {
             keyExtractor={(item) => String(item.id)}
             style={styles.logsScrollArea}
             showsVerticalScrollIndicator={true}
-            ListEmptyComponent={<Text style={styles.emptyText}>暫無警示紀錄。</Text>}
+            ListEmptyComponent={<Text style={styles.emptyText}>需先設定警示條件才能開始記錄歷史警示紀錄。</Text>}
             renderItem={({ item: log }) => (
               <View style={styles.logItem}>
                 <View style={styles.logIcon}>

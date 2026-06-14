@@ -415,7 +415,7 @@ export default function CropsScreen() {
               </View>
 
               <View style={styles.cardDataLayer}>
-                <Text style={styles.cardCropNameTitle} numberOfLines={1}>{item.name}</Text>
+                <Text style={styles.cardCropNameTitle} numberOfLines={1}>作物名稱：{item.name}</Text>
                 <Text style={styles.cardCropMetaText} numberOfLines={1}>作物階段：{item.stage}</Text>
                 <Text style={styles.cardCropMetaText} numberOfLines={1}>作物狀態：{item.status}</Text>
               </View>
@@ -478,11 +478,12 @@ export default function CropsScreen() {
                 <View style={styles.formCol}>
                   <Text style={styles.fieldLabel}>作物名稱</Text>
                   <TextInput 
-                    style={styles.formTextInput} 
+                    style={[styles.formTextInput, editingCropId ? { opacity: 0.6, backgroundColor: colors.border } : null]} 
                     placeholder="請輸入作物名稱" 
                     placeholderTextColor={colors.subMuted}
                     value={cropName}
                     onChangeText={setCropName}
+                    editable={!editingCropId}
                   />
                 </View>
                 <View style={styles.formCol}>

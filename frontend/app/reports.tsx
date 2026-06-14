@@ -28,8 +28,8 @@ export default function ReportsScreen() {
   const [startDate, setStartDate] = useState<string>(todayStr);
   const [endDate, setEndDate] = useState<string>('');
   
-  // 狀態變數：紀錄使用者勾選要顯示哪些圖表，預設顯示四大環境數據圖表
-  const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2']);
+  // 狀態變數：紀錄使用者勾選要顯示哪些圖表，預設顯示四大環境數據圖表及灌溉次數統計
+  const [selectedCharts, setSelectedCharts] = useState<string[]>(['temp', 'humid', 'light', 'co2', 'irrigation']);
   // 狀態變數：動態記錄右側圖表區塊的真實寬度，以便讓 Chart.js 能夠自適應排版 (RWD)
   const [chartWidth, setChartWidth] = useState<number>(Dimensions.get('window').width * 0.5);
 

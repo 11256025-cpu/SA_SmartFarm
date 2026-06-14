@@ -21,8 +21,8 @@ const BASE_URL = Platform.OS === 'android'
 export default function EnvironmentScreen() {
   // 1. 環境狀態變數：負責儲存與顯示控制面板及感測器當前的環境數值
   const [temperature, setTemperature] = useState(25);
-  const [light, setLight] = useState(100000);
-  const [humidity, setHumidity] = useState(25);
+  const [light, setLight] = useState(20000);
+  const [humidity, setHumidity] = useState(50);
   const [co2, setCo2] = useState(800);
 
   // 2. 灌溉排程變數：儲存自動灌溉的頻率、持續時間與目標濕度
@@ -74,6 +74,19 @@ export default function EnvironmentScreen() {
       
       if (stateData.success && stateData.state) {
         const s = stateData.state;
+        
+        // 💡 核心修正：判斷若後端回傳的環境數值為異常預設值（同時滿足濕度 25 與光照 100000）
+        // 則主動將環境數值修改至安全範圍內，並同步更新回後端
+        if (Number(s.humidity) === 25 && Number(s.light) === 100000) {
+          s.humidity = 50;
+          s.light = 20000;
+          fetch(`${BASE_URL}/api/simulator/update`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: uid, humidity: 50, light: 20000 }),
+          }).catch(e => console.warn("自動修正環境數值失敗:", e));
+        }
+
         // 更新 React 狀態，若從後端拿到的值存在，則覆寫當前畫面上的數值
         if (s.temperature !== undefined) setTemperature(Number(s.temperature));
         if (s.humidity !== undefined) setHumidity(Number(s.humidity));
@@ -135,6 +148,19 @@ export default function EnvironmentScreen() {
         const stateData = await stateResp.json();
         if (stateData.success && stateData.state) {
           const s = stateData.state;
+          
+          // 💡 核心修正：判斷若後端回傳的環境數值為異常預設值（同時滿足濕度 25 與光照 100000）
+          // 則主動將環境數值修改至安全範圍內，並同步更新回後端
+          if (Number(s.humidity) === 25 && Number(s.light) === 100000) {
+            s.humidity = 50;
+            s.light = 20000;
+            fetch(`${BASE_URL}/api/simulator/update`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: uid, humidity: 50, light: 20000 }),
+            }).catch(e => console.warn("自動修正環境數值失敗:", e));
+          }
+
           // 套用後端傳來的環境數值
           if (s.temperature !== undefined) setTemperature(Number(s.temperature));
           if (s.humidity !== undefined) setHumidity(Number(s.humidity));
@@ -723,7 +749,7 @@ const styles = StyleSheet.create({
   scheduleText: { color: colors.text, fontSize: typography.body, marginHorizontal: 8 },
   pickerWrapper: { backgroundColor: '#FFFFFF', borderRadius: 8, borderWidth: 1, borderColor: '#64748B', minWidth: 80, height: 36, justifyContent: 'center', overflow: 'hidden' },
   scheduleFooter: { marginTop: 10, flexDirection: 'row', justifyContent: 'space-between', width: '100%' },
-  saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md, flex: 1 },
+  saveButton: { backgroundColor: colors.secondary, paddingVertical: 10, paddingHorizontal: 20, borderRadius: radii.md, flex: 1, alignItems: 'center' },
   scheduleFooterButton: { minWidth: 140 },
   smallButton: { marginRight: 10, backgroundColor: colors.primary },
   saveButtonText: { color: colors.text, fontWeight: 'bold', fontSize: 14 },
